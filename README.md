@@ -8,7 +8,7 @@ python create_patches.py --patch_size 512
 
 # Create datasets
 
-python create_datasets.py --folder_patches BRACS_RoI_patches_512 --name_pkl data_RoI_512
+python create_datasets.py --patch_size 512
 
 # Train model
 

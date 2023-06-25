@@ -10,17 +10,16 @@ import argparse
 # Crear el objeto ArgumentParser y definir los argumentos
 parser = argparse.ArgumentParser(description='Configuración para la creación de patches')
 
-parser.add_argument('--folder_patches', type=str, default='BRACS_RoI_patches_v2',
-                    help='Nombre de la carpeta para los resultados')
-parser.add_argument('--name_pkl', type=str, default='data_RoI',
-                    help='Nombre del archivo pkl que se va a crear')
+parser.add_argument('--patch_size', type=int, default='BRACS_RoI_patches_v2',
+                    help='Tamaño de los patches')
 
 # Parsear los argumentos
 args = parser.parse_args()
 
 # Acceder a los valores de los argumentos
-folder_patches = args.folder_patches
-name_pkl=args.name_pkl
+patch_size=args.patch_size
+folder_patches = 'BRACS_RoI_patches'+str(patch_size)
+name_pkl='data_RoI'+str(patch_size)
 
 
 clases = pd.Series(['N', 'PB', 'UDH', 'FEA', 'ADH', 'DCIS', 'IC'])
