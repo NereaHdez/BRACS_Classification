@@ -61,7 +61,7 @@ for i in datasets:
     data_RoI[i]['y'] = ohe.transform(data_RoI[i]['y'].reshape(-1, 1))
 
 name_npy=name_pkl+'.npy'
-name_pkl=name_pkl+'pkl'
+name_pkl=name_pkl+'.pkl'
 
 np.save(name_npy, data_RoI)
 
