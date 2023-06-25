@@ -46,7 +46,8 @@ parser.add_argument('--weightsbyclass', type=int, default=0,
                     help='Indicador booleano para habilitar o deshabilitar los pesos segun el tamaño de la clase')
 parser.add_argument('--dropout', type=float, default=0.2,
                     help='Dropout')
-
+parser.add_argument('--patch_size', type=int, default=512,
+                    help='Tamaño del patch')
 
 
 # Parsear los argumentos
@@ -54,6 +55,7 @@ args = parser.parse_args()
 
 # Acceder a los valores de los argumentos
 batch_size = args.batch_size
+patch_size = args.patch_size
 lr = args.lr
 epochs = args.epochs
 bool_lr_scheduler = bool(args.bool_lr_scheduler)
@@ -132,10 +134,11 @@ val_transform = transforms.Compose([
     ])
 
 if data_augmentation:
+    n=patch_size-112
     train_transform = transforms.Compose([
     # Aplicar la personalización de la imagen
     transforms.ToTensor(),
-    transforms.RandomCrop((400, 400)),
+    transforms.RandomCrop((n, n)),
     transforms.RandomHorizontalFlip(0.5),
     transforms.RandomRotation((0, 180)),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
