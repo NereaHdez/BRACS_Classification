@@ -15,10 +15,24 @@ parser.add_argument('--results_folder_name', type=str, default='resultados_v2',
                     help='Nombre de la carpeta para los resultados')
 parser.add_argument('--Prob', type=int, default=1,
                     help='Indicador booleano para habilitar o deshabilitar los pesos segun el tamaño de la clase')
+parser.add_argument('--data_RoI', type=str, default='data_RoI_512.pkl',
+                    help='pkl de datasets')
+
 # Parsear los argumentos
 args = parser.parse_args()
 results_folder_name = args.results_folder_name
 Prob=bool(args.Prob)
+data_RoI_pkl=args.data_RoI
+
+import warnings
+warnings.filterwarnings("ignore")
+
+""" Create readers """
+dataReaders = {}
+
+with open(data_RoI_pkl, 'rb') as fp:
+    data_RoI = pickle.load(fp)
+dataReaders['CNN'] = data_RoI
 
 path_dir='./'
 save_path = path_dir+'results/'+results_folder_name+'/'
@@ -45,15 +59,17 @@ else:
     print("No se encontró ningún archivo que cumpla con el criterio.")
 
 
+
 for i in ['val', 'train']:
-  data = pd.DataFrame()
-  data['Case_Ids'] = results['Case_Ids']
+  data = pd.DataFrame() 
   if i=="train":
+    data['Case_Ids'] = results['train_case_ids']
     data['Preds'] = results['train_preds']
     data['Real'] =  results['train_labels']
     probs=results['train_probs']
 
   else:
+    data['Case_Ids'] = dataReaders['CNN']['val']['x']
     data['Preds'] = results['val_preds']
     data['Real'] =  results['val_labels']
     probs=results['val_probs']
@@ -77,7 +93,7 @@ for i in ['val', 'train']:
         labels = str(np.where(real == 0, 'AT', np.where(real == 1, 'BT', 'MT')))
         preds= str(np.where(pred == 0, 'AT', np.where(pred == 1, 'BT', 'MT')).astype(str))
         final=final.append({'Case_id':k,'preds':preds,'real':labels}, ignore_index=True)
-    final.to_excel(save_path+i+'_results'+'.xlsx')
+    final.to_excel('./'+i+'_results'+'.xlsx')
     accuracy = accuracy_score( np.array(final['real']), np.array(final['preds']))
     f1 = f1_score( np.array(final['real']), np.array(final['preds']), average='weighted')
     cm=confusion_matrix(np.array(final['real']), np.array(final['preds']))

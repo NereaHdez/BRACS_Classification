@@ -30,6 +30,7 @@ Prob=bool(args.Prob)
 
 path_dir='./'
 save_path = path_dir+'results/'+results_folder_name+'/'
+directorio_actual = os.getcwd()
 
 val_transform = transforms.Compose([
         transforms.ToTensor(),
@@ -51,7 +52,7 @@ dataloader_test = DataLoader(dataset_test, batch_size=1,
 
 dataloaders = { 'test': dataloader_test}
 #get dataset sizes
-dataset_sizes = {x: len(dataReaders['CNN'][x]['x']) for x in [ 'test']}
+dataset_sizes = {x: len(dataReaders['CNN'][x]['x']) for x in [ 'train', 'val','test']}
 
 os.chdir(save_path) 
 # Obtener la lista de archivos en la carpeta actual
@@ -75,15 +76,11 @@ if archivo_deseado is not None:
 else:
     print("No se encontró ningún archivo que cumpla con el criterio.")
 
-# write dict results on file
-a_file = open(save_path+'results_Epoch_'+str(results['best_epoch'])+'.pkl', "wb")
-pickle.dump(results, a_file)
-a_file.close()
-
 model = results['model']
 
 model.eval()
 
+os.chdir(directorio_actual)
 # predict on test set  
 test_results = predict_WSI(model, dataloader_test, dataset_sizes['test'])
 print('Test acc: {:.4f}\n'.format(test_results['acc']))
@@ -106,7 +103,7 @@ data.to_excel(save_path+'test.xlsx')
 #full image predictions
 
 data = pd.DataFrame()
-data['Case_Ids'] = test_results['Case_Ids']
+data['Case_Ids'] = dataReaders['CNN']['test']['x']
 data['Preds'] = test_results['preds']
 data['Real'] =  test_results['labels']
 probs=test_results['probs']
