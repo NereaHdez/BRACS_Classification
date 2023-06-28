@@ -19,7 +19,8 @@ import logging
 import time
 import copy
 from tqdm import tqdm
-
+from torch.utils.tensorboard import SummaryWriter
+writer = SummaryWriter()
 
 def train_model(model, criterion, optimizer, dataloaders, dataset_sizes,
                 lr_scheduler,  warmup_scheduler, save_path, num_epochs=25, verbose=True):
@@ -109,9 +110,13 @@ def train_model(model, criterion, optimizer, dataloaders, dataset_sizes,
                 running_corrects += torch.sum(preds == mlabels)
                 sizes[phase] += inputs.size(0)
 
+            
             epoch_loss = running_loss / sizes[phase]
             epoch_acc = running_corrects.item() / sizes[phase]
-
+            if phase == 'train':
+                 writer.add_scalar("Loss/train", epoch_loss, epoch)
+            if phase == 'val':
+                writer.add_scalar("Loss/val", epoch_loss, epoch)
             loss_array[phase].append(epoch_loss)
             acc_array[phase].append(epoch_acc)
 

@@ -13,8 +13,8 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 import random
 import torchvision.transforms as transforms
-from pytorch_datasets_norm import Dataset, TestDataset
-from train_pred import  train_model
+from pytorch_datasets import Dataset, TestDataset
+from train_pred import predict_WSI, train_model
 import warnings
 warnings.filterwarnings("ignore")
 from PIL import Image
@@ -26,7 +26,7 @@ import argparse
 # Crear el objeto ArgumentParser y definir los argumentos
 parser = argparse.ArgumentParser(description='Configuración para el entrenamiento del modelo')
 
-parser.add_argument('--lr', type=float, default=3e-3,
+parser.add_argument('--lr', type=float, default=0.01,
                     help='Tasa de aprendizaje (lr)')
 parser.add_argument('--epochs', type=int, default=50,
                     help='Número de épocas')
@@ -34,7 +34,7 @@ parser.add_argument('--bool_lr_scheduler', type=int, default=1,
                     help='Indicador booleano para habilitar o deshabilitar el ajuste de tasa de aprendizaje')
 parser.add_argument('--results_folder_name', type=str, default='resultados_v2',
                     help='Nombre de la carpeta para los resultados')
-parser.add_argument('--max_patches', type=int, default=20,
+parser.add_argument('--max_patches', type=int, default=None,
                     help='Número máximo de patches por imágenes')
 parser.add_argument('--batch_size', type=int, default=32,
                     help='Tamaño del batch')
@@ -102,24 +102,24 @@ data['Case_Ids'] = dataReaders['CNN']['train']['x']
 ids = []
 
 #Seleccionar un maximo de n patches por cada foto
+if max_patches!=None:
+    for j in data['Case_Ids']:
+        aux = '_'.join(j.split('_')[0:-1])
+        ids.append(aux)
 
-for j in data['Case_Ids']:
-    aux = '_'.join(j.split('_')[0:-1])
-    ids.append(aux)
+    ids = pd.unique(ids)
 
-ids = pd.unique(ids)
+    selected_indices = []
 
-selected_indices = []
-
-for k in ids:
-    p = data[data['Case_Ids'].str.contains(k)]
-    indices_aleatorios = random.sample(range(len(p)), min(len(p), max_patches))
-    filas_aleatorias = p.iloc[indices_aleatorios]
-    selected_indices.extend(filas_aleatorias.index.tolist())
+    for k in ids:
+        p = data[data['Case_Ids'].str.contains(k)]
+        indices_aleatorios = random.sample(range(len(p)), min(len(p), max_patches))
+        filas_aleatorias = p.iloc[indices_aleatorios]
+        selected_indices.extend(filas_aleatorias.index.tolist())
 
 
-dataReaders['CNN']['train']['x'] = dataReaders['CNN']['train']['x'][selected_indices]
-dataReaders['CNN']['train']['y'] = dataReaders['CNN']['train']['y'][selected_indices]
+    dataReaders['CNN']['train']['x'] = dataReaders['CNN']['train']['x'][selected_indices]
+    dataReaders['CNN']['train']['y'] = dataReaders['CNN']['train']['y'][selected_indices]
 
 
 train_transform = transforms.Compose([
@@ -141,7 +141,6 @@ if data_augmentation:
     transforms.RandomCrop((n, n)),
     transforms.RandomHorizontalFlip(0.5),
     transforms.RandomRotation((0, 180)),
-    transforms.ColorJitter(brightness= 0.5, contrast= 0.5, saturation=  0.5, hue= 0.3),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
@@ -234,7 +233,7 @@ save_path = path_dir+'results/'+results_folder_name+'/'
 
 params = [p for p in model.parameters() if p.requires_grad]
 # Configura el optimizador con weight decay
-optimizer = optim.AdamW(params, lr=lr)
+optimizer = optim.Adam(params, lr=lr)
 #Decays the learning rate of each parameter group by gamma every step_size epochs
 if bool_lr_scheduler:
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
