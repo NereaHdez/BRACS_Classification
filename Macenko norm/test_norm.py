@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from pytorch_datasets_norm import Dataset, TestDataset
-from train_pred import predict_WSI, train_model
+from train_pred_v2 import predict_WSI, train_model
 from torch.utils.data import DataLoader
 from torchvision import transforms
 import torchvision.transforms as transforms

@@ -1,0 +1,234 @@
+import time
+import torch
+import copy
+from tqdm import tqdm
+import torch.nn as nn
+import torch.optim as optim
+from collections import Counter 
+import logging
+from sklearn.metrics import roc_auc_score, confusion_matrix
+import torch.nn.functional as F
+import numpy as np
+from sklearn.cluster import KMeans
+
+
+device = torch.device("cuda:0" if torch.cuda.is_available()
+                                   else "cpu")
+
+import logging
+import time
+import copy
+from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
+writer = SummaryWriter()
+
+def train_model(model, criterion, optimizer, dataloaders, dataset_sizes,
+                lr_scheduler,  warmup_scheduler, save_path, num_epochs=25, verbose=True):
+    LOG = save_path + "/execution.log"
+    logging.basicConfig(filename=LOG, filemode="w", level=logging.DEBUG)
+
+    # console handler
+    console = logging.StreamHandler()
+    console.setLevel(logging.ERROR)
+    logging.getLogger("").addHandler(console)
+
+    logger = logging.getLogger(__name__)
+    since = time.time()
+
+    best_model_wts = copy.deepcopy(model.state_dict())
+    best_acc = 0.0
+    best_epoch = 0
+    best_auc = 0
+
+    acc_array = {'train': [], 'val': []}
+    loss_array = {'train': [], 'val': []}
+    auc_array = {'train': [], 'val': []}
+    best_val_preds = []
+    best_train_preds = []
+    for epoch in range(num_epochs):
+        print('Epoch {}/{}'.format(epoch, num_epochs - 1))
+        print('-' * 10)
+        logger.debug('Epoch {}/{}'.format(epoch, num_epochs - 1))
+        logger.debug('-' * 10)
+        val_preds = []
+        train_preds = []
+        train_case_ids = []
+        train_labels = []
+        val_labels = []
+        train_labels_auc = []
+        train_preds_auc = []
+        val_labels_auc = []
+        val_preds_auc = []
+        train_probs = []
+        val_probs = []
+        sizes = {'train': 0, 'val': 0}
+        # Each epoch has a training and validation phase
+        for phase in ['train', 'val']:
+            if phase == 'train':
+                model.train()  # Set model to training mode
+            else:
+                model.eval()   # Set model to evaluate mode
+
+            running_loss = 0.0
+            running_corrects = 0
+
+            # Iterate over data.
+            for inputs, labels, case_ids in tqdm(dataloaders[phase]):
+                inputs = inputs.to(device)
+                inputs.requires_grad = True
+                labels = labels.to(device)
+                # zero the parameter gradients
+                optimizer.zero_grad()
+
+                # forward
+                # track history if only in train
+                with torch.set_grad_enabled(phase == 'train'):
+                    outputs = model(inputs)
+                    _, preds = torch.max(outputs, 1)
+                    _, mlabels = torch.max(labels, 1)
+
+                    loss = criterion(outputs, mlabels)
+                    if phase == 'val':
+                        val_preds += list(preds.cpu().numpy())
+                        val_labels += list(mlabels.cpu().numpy())
+                        val_probs.extend(list(outputs.cpu().detach().numpy()))
+
+                    # backward + optimize only if in training phase
+
+                    if phase == 'train':
+                        train_preds.extend(preds.cpu().numpy())
+                        train_case_ids.extend(case_ids)
+                        train_labels.extend(mlabels.cpu().numpy())
+                        train_probs.extend(list(outputs.cpu().detach().numpy()))
+                        loss.backward()
+                        optimizer.step()
+                        with warmup_scheduler.dampening():
+                             lr_scheduler.step()
+                # statistics
+
+                running_loss += loss.item() * inputs.size(0)
+                running_corrects += torch.sum(preds == mlabels)
+                sizes[phase] += inputs.size(0)
+
+            
+            epoch_loss = running_loss / sizes[phase]
+            epoch_acc = running_corrects.item() / sizes[phase]
+            if phase == 'train':
+                 writer.add_scalar("Loss/train", epoch_loss, epoch)
+                 writer.add_scalar("Acc/train", epoch_acc, epoch)
+            if phase == 'val':
+                writer.add_scalar("Loss/val", epoch_loss, epoch)
+                writer.add_scalar("Acc/val", epoch_acc, epoch)
+            loss_array[phase].append(epoch_loss)
+            acc_array[phase].append(epoch_acc)
+
+            if verbose:
+                print('{} Loss: {:.4f} Acc: {:.4f}'.format(
+                    phase, epoch_loss, epoch_acc))
+                logger.debug('{} Loss: {:.4f} Acc: {:.4f}'.format(
+                    phase, epoch_loss, epoch_acc))
+
+            if phase == 'val' and epoch_acc > best_acc:
+                best_epoch = epoch
+                best_acc = epoch_acc
+                best_model_wts = copy.deepcopy(model.state_dict())
+                best_val_preds = val_preds[:]
+                best_train_preds = train_preds[:]
+                best_train_probs= np.matrix(train_probs[:])
+                best_val_probs= np.matrix(val_probs[:])
+        print()
+
+    time_elapsed = time.time() - since
+    if verbose:
+        print('Training complete in {:.0f}m {:.0f}s'.format(
+            time_elapsed // 60, time_elapsed % 60))
+        print('Best val Acc: {:4f}'.format(best_acc))
+
+        logger.debug('Training complete in {:.0f}m {:.0f}s'.format(
+            time_elapsed // 60, time_elapsed % 60))
+        logger.debug('Best val Acc: {:4f}'.format(best_acc))
+
+    # load best model weights
+    model.load_state_dict(best_model_wts)
+    if best_val_preds == []:
+        best_val_preds = val_preds[:]
+    results = {
+        'model': model,
+        'best_acc': best_acc,
+       'best_auc': best_auc,
+        'best_epoch': best_epoch,
+        'acc_array': acc_array,
+        'loss_array': loss_array,
+        'auc_array': auc_array,
+        'val_preds': best_val_preds,
+        'val_labels': val_labels,
+        'train_preds': best_train_preds,
+        'train_case_ids': train_case_ids,
+        'train_labels': train_labels,
+        'train_probs': best_train_probs,
+        'val_probs': best_val_probs
+    }
+
+    return results
+
+def predict_WSI(model, dataloader, dataset_size, verbose=True):
+    """Predict an image by using patches."""
+    activation = {}
+    def _get_features(name):
+        def hook(model, input, output):
+            activation[name] = input[0].detach()
+        return hook
+
+    model.eval()
+    since = time.time()
+    corrects = 0
+    # results variables
+    preds = []
+    patch_preds = []
+    probs = []
+    model.fc.register_forward_hook(_get_features('fc'))
+    features = []
+    case_ids = []
+    patch_labels = []
+
+    for inputs, labels, cids in tqdm(dataloader):
+        _, mlabel = torch.max(labels, 1)
+        local_preds = []
+        local_features = []
+        for patch, cid in zip(inputs, cids):
+            patch = patch.to(device).float()
+            output = model(patch)
+            _, pred = torch.max(output, 1)
+            local_preds.append(pred.item())
+            local_features.append(activation['fc'].cpu().numpy())
+            case_ids.append(cid)
+            patch_labels.append(mlabel.item())
+            probs.extend(list(output.cpu().detach().numpy()))
+        patch_preds.extend(local_preds)
+        features.append(local_features)
+
+        # Calculate accuracy
+        if mlabel.item() in local_preds:
+            corrects += 1
+
+        del inputs, labels
+
+    acc = corrects / dataset_size
+
+    probs=np.matrix(probs[:])
+
+    time_elapsed = time.time() - since
+    if verbose:
+        print('Test complete in {:.0f}m {:.0f}s'.format(
+              time_elapsed // 60, time_elapsed % 60))
+
+    all_results = {
+        'acc': acc,
+        'preds': patch_preds,
+        'labels': patch_labels,
+        'probs': probs,
+        'patch_case_ids': case_ids,
+        'features': features
+    }
+
+    return all_results
