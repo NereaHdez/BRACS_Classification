@@ -183,37 +183,30 @@ def predict_WSI(model, dataloader, dataset_size, verbose=True):
     since = time.time()
     corrects = 0
     # results variables
-    preds = []
-    patch_preds = []
+    test_preds = []
     probs = []
     model.fc.register_forward_hook(_get_features('fc'))
     features = []
     case_ids = []
-    patch_labels = []
+    test_labels = []
 
     for inputs, labels, cids in tqdm(dataloader):
+        inputs = inputs.to(device)
+        inputs.requires_grad = True
+        labels = labels.to(device)
+        outputs = model(inputs)
         _, mlabel = torch.max(labels, 1)
-        local_preds = []
-        local_features = []
-        for patch, cid in zip(inputs, cids):
-            patch = patch.to(device).float()
-            output = model(patch)
-            _, pred = torch.max(output, 1)
-            local_preds.append(pred.item())
-            local_features.append(activation['fc'].cpu().numpy())
-            case_ids.append(cid)
-            patch_labels.append(mlabel.item())
-            probs.extend(list(output.cpu().detach().numpy()))
-        patch_preds.extend(local_preds)
-        features.append(local_features)
+        _, preds = torch.max(outputs, 1)
 
+        test_preds += list(preds.cpu().numpy())
+        test_labels += list(mlabel.cpu().numpy())
+        probs.extend(list(outputs.cpu().detach().numpy()))
+        features.append(activation['fc'].cpu().numpy())
+        case_ids.append(cids)
         # Calculate accuracy
-        if mlabel.item() in local_preds:
-            corrects += 1
+        corrects += torch.sum(preds == mlabel)
 
-        del inputs, labels
-
-    acc = corrects / dataset_size
+    acc = corrects.item() / dataset_size
 
     probs=np.matrix(probs[:])
 
@@ -224,8 +217,8 @@ def predict_WSI(model, dataloader, dataset_size, verbose=True):
 
     all_results = {
         'acc': acc,
-        'preds': patch_preds,
-        'labels': patch_labels,
+        'preds': test_preds,
+        'labels': test_labels,
         'probs': probs,
         'patch_case_ids': case_ids,
         'features': features
