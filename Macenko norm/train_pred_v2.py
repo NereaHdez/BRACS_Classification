@@ -115,8 +115,10 @@ def train_model(model, criterion, optimizer, dataloaders, dataset_sizes,
             epoch_acc = running_corrects.item() / sizes[phase]
             if phase == 'train':
                  writer.add_scalar("Loss/train", epoch_loss, epoch)
+                 writer.add_scalar("Acc/train", epoch_acc, epoch)
             if phase == 'val':
                 writer.add_scalar("Loss/val", epoch_loss, epoch)
+                writer.add_scalar("Acc/val", epoch_acc, epoch)
             loss_array[phase].append(epoch_loss)
             acc_array[phase].append(epoch_acc)
 
