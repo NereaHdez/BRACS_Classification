@@ -4,7 +4,6 @@ import copy
 from tqdm import tqdm
 import torch.nn as nn
 import torch.optim as optim
-import optuna
 from collections import Counter 
 import logging
 from sklearn.metrics import roc_auc_score, confusion_matrix
@@ -20,10 +19,11 @@ import logging
 import time
 import copy
 from tqdm import tqdm
-
+from torch.utils.tensorboard import SummaryWriter
+writer = SummaryWriter()
 
 def train_model(model, criterion, optimizer, dataloaders, dataset_sizes,
-                lr_scheduler, save_path, num_epochs=25, verbose=True):
+                lr_scheduler,  warmup_scheduler, save_path, num_epochs=25, verbose=True):
     LOG = save_path + "/execution.log"
     logging.basicConfig(filename=LOG, filemode="w", level=logging.DEBUG)
 
@@ -84,7 +84,7 @@ def train_model(model, criterion, optimizer, dataloaders, dataset_sizes,
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
                     outputs = model(inputs)
-                    probs, preds = torch.max(outputs, 1)
+                    _, preds = torch.max(outputs, 1)
                     _, mlabels = torch.max(labels, 1)
 
                     loss = criterion(outputs, mlabels)
@@ -102,15 +102,23 @@ def train_model(model, criterion, optimizer, dataloaders, dataset_sizes,
                         train_probs.extend(list(outputs.cpu().detach().numpy()))
                         loss.backward()
                         optimizer.step()
+                        with warmup_scheduler.dampening():
+                             lr_scheduler.step()
                 # statistics
 
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == mlabels)
                 sizes[phase] += inputs.size(0)
 
+            
             epoch_loss = running_loss / sizes[phase]
             epoch_acc = running_corrects.item() / sizes[phase]
-
+            if phase == 'train':
+                 writer.add_scalar("Loss/train", epoch_loss, epoch)
+                 writer.add_scalar("Acc/train", epoch_acc, epoch)
+            if phase == 'val':
+                writer.add_scalar("Loss/val", epoch_loss, epoch)
+                writer.add_scalar("Acc/val", epoch_acc, epoch)
             loss_array[phase].append(epoch_loss)
             acc_array[phase].append(epoch_acc)
 
@@ -175,37 +183,30 @@ def predict_WSI(model, dataloader, dataset_size, verbose=True):
     since = time.time()
     corrects = 0
     # results variables
-    preds = []
-    patch_preds = []
+    test_preds = []
     probs = []
     model.fc.register_forward_hook(_get_features('fc'))
     features = []
     case_ids = []
-    patch_labels = []
+    test_labels = []
 
     for inputs, labels, cids in tqdm(dataloader):
+        inputs = inputs.to(device)
+        inputs.requires_grad = True
+        labels = labels.to(device)
+        outputs = model(inputs)
         _, mlabel = torch.max(labels, 1)
-        local_preds = []
-        local_features = []
-        for patch, cid in zip(inputs, cids):
-            patch = patch.to(device).float()
-            output = model(patch)
-            _, pred = torch.max(output, 1)
-            local_preds.append(pred.item())
-            local_features.append(activation['fc'].cpu().numpy())
-            case_ids.append(cid)
-            patch_labels.append(mlabel.item())
-            probs.extend(list(output.cpu().detach().numpy()))
-        patch_preds.extend(local_preds)
-        features.append(local_features)
+        _, preds = torch.max(outputs, 1)
 
+        test_preds += list(preds.cpu().numpy())
+        test_labels += list(mlabel.cpu().numpy())
+        probs.extend(list(outputs.cpu().detach().numpy()))
+        features.append(activation['fc'].cpu().numpy())
+        case_ids.append(cids)
         # Calculate accuracy
-        if mlabel.item() in local_preds:
-            corrects += 1
+        corrects += torch.sum(preds == mlabel)
 
-        del inputs, labels
-
-    acc = corrects / dataset_size
+    acc = corrects.item() / dataset_size
 
     probs=np.matrix(probs[:])
 
@@ -216,8 +217,8 @@ def predict_WSI(model, dataloader, dataset_size, verbose=True):
 
     all_results = {
         'acc': acc,
-        'preds': patch_preds,
-        'labels': patch_labels,
+        'preds': test_preds,
+        'labels': test_labels,
         'probs': probs,
         'patch_case_ids': case_ids,
         'features': features
