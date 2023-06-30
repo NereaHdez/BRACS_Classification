@@ -14,7 +14,7 @@ from torchvision import transforms
 import random
 import torchvision.transforms as transforms
 from pytorch_datasets_norm import Dataset, TestDataset
-from train_pred_v2 import  train_model
+from train_pred import  train_model
 import warnings
 warnings.filterwarnings("ignore")
 from PIL import Image

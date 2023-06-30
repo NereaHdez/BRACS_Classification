@@ -14,7 +14,7 @@ from torchvision import transforms
 import random
 import torchvision.transforms as transforms
 from pytorch_datasets_norm import Dataset, TestDataset
-from train_pred_v2 import  train_model
+from train_pred import  train_model
 import warnings
 warnings.filterwarnings("ignore")
 from PIL import Image
@@ -191,7 +191,7 @@ There are different versions of ResNet, including ResNet-18, ResNet-34, ResNet-5
 
 
 
-model = torchvision.models.resnet18(weights='DEFAULT' , progress=True) 
+model = torchvision.models.resnet50(weights='DEFAULT' , progress=True) 
 clases=['AT', 'BT', 'MT']
 for param in model.parameters():
     param.requires_grad = False
