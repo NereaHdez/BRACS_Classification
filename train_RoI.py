@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 import random
 import torchvision.transforms as transforms
-from pytorch_datasets import Dataset, TestDataset
+from pytorch_datasets import Dataset, Dataset_full
 from train_pred import  train_model
 import warnings
 warnings.filterwarnings("ignore")
@@ -56,6 +56,14 @@ parser.add_argument('--warmup', type=str, default='linear',
                         help='warmup schedule')
 parser.add_argument('--lr_min', type=float, default=1e-6,
                     help='lr mínimo')
+parser.add_argument('--model', type=str, default='resnet18',
+                    help='Nombre de la red preentrenada')
+parser.add_argument('--normalization', type=str, default='macenko',
+                    help='pkl de datasets')
+parser.add_argument('--im_size', type=int, default=512,
+                    help='Tamaño de la imagen')
+parser.add_argument('--full', type=int, default=0,
+                    help='Indicador booleano para habilitar o deshabilitar tratar con full imagenes')
 # Parsear los argumentos
 args = parser.parse_args()
 
@@ -70,9 +78,13 @@ max_patches=args.max_patches
 path_dir='./'
 data_RoI_pkl=args.data_RoI
 data_augmentation=bool(args.data_augmentation)
+full=bool(args.full)
 weightsbyclass=bool(args.weightsbyclass)
 model_name='modelo'+data_RoI_pkl+'_'+str(max_patches)
 dropout=args.dropout
+model_cnn = args.model
+norm=args.normalization
+n = args.im_size
 
 def init_weights(m):
     if type(m) == nn.Linear:
@@ -139,7 +151,7 @@ val_transform = transforms.Compose([
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 
-if data_augmentation:
+if data_augmentation and not full:
     n=patch_size-112
     train_transform = transforms.Compose([
     # Aplicar la personalización de la imagen
@@ -156,26 +168,62 @@ if data_augmentation:
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 
+elif data_augmentation and full:
+    train_transform = transforms.Compose([
+    # Aplicar la personalización de la imagen
+    transforms.ToTensor(),
+    transforms.RandomHorizontalFlip(0.5),
+    transforms.RandomRotation((0, 180)),
+    transforms.ColorJitter(brightness= 0.5, contrast= 0.5, saturation=  0.5, hue= 0.3),
+    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+])
+
+    val_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
+
+if full:
+    dataset_train = Dataset_full(dataReaders['CNN']['train']['x'], 
+                            dataReaders['CNN']['train']['y'], train_transform, norm, (n,n))
+
+    #create val dataset
+    dataset_val = Dataset_full(dataReaders['CNN']['val']['x'], 
+                    dataReaders['CNN']['val']['y'], val_transform, norm, (n,n))
 
 
-dataset_train = Dataset(dataReaders['CNN']['train']['x'], 
-                        dataReaders['CNN']['train']['y'], train_transform)
-dataloader_train = DataLoader(dataset_train, batch_size=32,
-                                shuffle=False, num_workers=8, 
-                                pin_memory=True)
-#create val dataloader
-dataset_val = Dataset(dataReaders['CNN']['val']['x'], 
-                dataReaders['CNN']['val']['y'], val_transform)
+    #create test dataset
+    dataset_test = Dataset_full(dataReaders['CNN']['test']['x'],
+                        dataReaders['CNN']['test']['y'], val_transform, norm, (n,n))
+
+else:
+    dataset_train = Dataset(dataReaders['CNN']['train']['x'], 
+                            dataReaders['CNN']['train']['y'], train_transform, norm)
+   
+    #create val dataset
+    dataset_val = Dataset(dataReaders['CNN']['val']['x'], 
+                    dataReaders['CNN']['val']['y'], val_transform, norm)
+
+    
+    #create test dataset
+    dataset_test = Dataset(dataReaders['CNN']['test']['x'],
+                        dataReaders['CNN']['test']['y'], val_transform, norm)
+    
+
+#Create dataloaders
+
+dataloader_train = DataLoader(dataset_train, batch_size=batch_size,
+                                    shuffle=False, num_workers=8, 
+                                    pin_memory=True)
 
 dataloader_val = DataLoader(dataset_val, batch_size=8,
-                            shuffle=False, num_workers=4, 
-                            pin_memory=True)
-#create test dataloader
-dataset_test = TestDataset(dataReaders['CNN']['test']['x'],
-                    dataReaders['CNN']['test']['y'], val_transform)
-dataloader_test = DataLoader(dataset_test, batch_size=1,
-                                shuffle=False, num_workers=1,
+                                shuffle=False, num_workers=4, 
                                 pin_memory=True)
+
+dataloader_test = DataLoader(dataset_test, batch_size=1,
+                                    shuffle=False, num_workers=1,
+                                    pin_memory=True)
+
 
 dataloaders = {'train': dataloader_train, 'val': dataloader_val, 'test': dataloader_test}
 #get dataset sizes
@@ -191,7 +239,11 @@ There are different versions of ResNet, including ResNet-18, ResNet-34, ResNet-5
 
 
 
-model = torchvision.models.resnet18(weights='DEFAULT' , progress=True) 
+if model_cnn=='resnet18':
+    model = torchvision.models.resnet18(weights='DEFAULT' , progress=True) 
+elif model_cnn=='resnet50':
+    model = torchvision.models.resnet50(weights='DEFAULT' , progress=True)
+
 clases=['AT', 'BT', 'MT']
 for param in model.parameters():
     param.requires_grad = False

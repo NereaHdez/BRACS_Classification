@@ -7,8 +7,8 @@ from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-from pytorch_datasets import Dataset, TestDataset
-from train_pred import predict_WSI, train_model
+from pytorch_datasets import Dataset, Dataset_full
+from train_pred import predict_WSI
 from torch.utils.data import DataLoader
 from torchvision import transforms
 import torchvision.transforms as transforms
@@ -22,15 +22,23 @@ parser.add_argument('--data_RoI', type=str, default='data_RoI_256.pkl',
                     help='pkl de datasets')
 parser.add_argument('--Prob', type=int, default=1,
                     help='Indicador booleano para habilitar o deshabilitar los pesos segun el tamaño de la clase')
+parser.add_argument('--normalization', type=str, default='macenko',
+                    help='pkl de datasets')
+parser.add_argument('--full', type=int, default=0,
+                    help='Indicador booleano para habilitar o deshabilitar tratar con full imagenes')
+parser.add_argument('--im_size', type=int, default=512,
+                    help='Tamaño de la imagen')
 # Parsear los argumentos
 args = parser.parse_args()
 results_folder_name = args.results_folder_name
 data_RoI_pkl=args.data_RoI
 Prob=bool(args.Prob)
-
+norm=args.normalization
 path_dir='./'
 save_path = path_dir+'results/'+results_folder_name+'/'
 directorio_actual = os.getcwd()
+full=bool(args.full)
+n = args.im_size
 
 val_transform = transforms.Compose([
         transforms.ToTensor(),
@@ -43,9 +51,15 @@ with open(data_RoI_pkl, 'rb') as fp:
     data_RoI = pickle.load(fp)
 dataReaders['CNN'] = data_RoI
 
+
 #create test dataloader
-dataset_test = TestDataset(dataReaders['CNN']['test']['x'],
-                    dataReaders['CNN']['test']['y'], val_transform)
+
+if full: 
+    dataset_test = Dataset_full(dataReaders['CNN']['test']['x'],
+                        dataReaders['CNN']['test']['y'], val_transform, normalization=norm, resize=(n,n))
+else:
+    dataset_test = Dataset(dataReaders['CNN']['test']['x'],
+                        dataReaders['CNN']['test']['y'], val_transform, normalization=norm)
 dataloader_test = DataLoader(dataset_test, batch_size=1,
                                 shuffle=False, num_workers=1,
                                 pin_memory=True)
