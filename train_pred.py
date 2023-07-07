@@ -27,7 +27,7 @@ def train_model(model, criterion, optimizer, dataloaders, dataset_sizes,
     LOG = save_path + "/execution.log"
     logging.basicConfig(filename=LOG, filemode="w", level=logging.DEBUG)
 
-    # console handler
+    # controlador de consola
     console = logging.StreamHandler()
     console.setLevel(logging.ERROR)
     logging.getLogger("").addHandler(console)
@@ -62,26 +62,26 @@ def train_model(model, criterion, optimizer, dataloaders, dataset_sizes,
         train_probs = []
         val_probs = []
         sizes = {'train': 0, 'val': 0}
-        # Each epoch has a training and validation phase
+        # Cada epoch tiene una fase de entrenamiento y otra de validación
         for phase in ['train', 'val']:
             if phase == 'train':
-                model.train()  # Set model to training mode
+                model.train()  # Poner el modelo en modo de entrenamiento
             else:
-                model.eval()   # Set model to evaluate mode
+                model.eval()   # Poner el modelo en modo evaluación
 
             running_loss = 0.0
             running_corrects = 0
 
-            # Iterate over data.
+            # Iterar sobre los datos.
             for inputs, labels, case_ids in tqdm(dataloaders[phase]):
                 inputs = inputs.to(device)
                 inputs.requires_grad = True
                 labels = labels.to(device)
-                # zero the parameter gradients
+                # poner a cero los gradientes de los parámetros
                 optimizer.zero_grad()
 
-                # forward
-                # track history if only in train
+                # hacia delante
+                # seguimiento del historial si sólo en entrenamiento
                 with torch.set_grad_enabled(phase == 'train'):
                     outputs = model(inputs)
                     _, preds = torch.max(outputs, 1)
@@ -93,7 +93,7 @@ def train_model(model, criterion, optimizer, dataloaders, dataset_sizes,
                         val_labels += list(mlabels.cpu().numpy())
                         val_probs.extend(list(outputs.cpu().detach().numpy()))
 
-                    # backward + optimize only if in training phase
+                    # hacia atrás + optimizar sólo si está en fase de entrenamiento
 
                     if phase == 'train':
                         train_preds.extend(preds.cpu().numpy())
@@ -104,7 +104,7 @@ def train_model(model, criterion, optimizer, dataloaders, dataset_sizes,
                         optimizer.step()
                         with warmup_scheduler.dampening():
                              lr_scheduler.step()
-                # statistics
+                # estadicticas
 
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == mlabels)
@@ -148,7 +148,7 @@ def train_model(model, criterion, optimizer, dataloaders, dataset_sizes,
             time_elapsed // 60, time_elapsed % 60))
         logger.debug('Best val Acc: {:4f}'.format(best_acc))
 
-    # load best model weights
+    # cargar las pesos del mejor modelo
     model.load_state_dict(best_model_wts)
     if best_val_preds == []:
         best_val_preds = val_preds[:]
@@ -172,7 +172,7 @@ def train_model(model, criterion, optimizer, dataloaders, dataset_sizes,
     return results
 
 def predict_WSI(model, dataloader, dataset_size, verbose=True):
-    """Predict an image by using patches."""
+    """Predecir patches/imagenes"""
     activation = {}
     def _get_features(name):
         def hook(model, input, output):
@@ -182,7 +182,7 @@ def predict_WSI(model, dataloader, dataset_size, verbose=True):
     model.eval()
     since = time.time()
     corrects = 0
-    # results variables
+    # variables
     test_preds = []
     probs = []
     model.fc.register_forward_hook(_get_features('fc'))
@@ -203,7 +203,7 @@ def predict_WSI(model, dataloader, dataset_size, verbose=True):
         probs.extend(list(outputs.cpu().detach().numpy()))
         features.append(activation['fc'].cpu().numpy())
         case_ids.append(cids)
-        # Calculate accuracy
+        # Calcular precisión
         corrects += torch.sum(preds == mlabel)
 
     acc = corrects.item() / dataset_size

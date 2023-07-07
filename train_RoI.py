@@ -95,11 +95,11 @@ device = torch.device("cuda:0" if torch.cuda.is_available()
 torch.cuda.empty_cache()
 
 
-# Creating folder for saving weights
+# Crear carpeta para guardar los pesos
 os.makedirs(path_dir+'weights/'+results_folder_name, exist_ok=True)
 os.makedirs(path_dir+'results/'+results_folder_name, exist_ok=True)
     
-""" Create readers """
+""" Crear readers """
 dataReaders = {}
 
 with open(data_RoI_pkl, 'rb') as fp:
@@ -163,11 +163,6 @@ if data_augmentation and not full:
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
-    val_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-
 elif data_augmentation and full:
     train_transform = transforms.Compose([
     # Aplicar la personalización de la imagen
@@ -178,21 +173,17 @@ elif data_augmentation and full:
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
-    val_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
 
 if full:
     dataset_train = Dataset_full(dataReaders['CNN']['train']['x'], 
                             dataReaders['CNN']['train']['y'], train_transform, norm, (n,n))
 
-    #create val dataset
+    #crear val dataset
     dataset_val = Dataset_full(dataReaders['CNN']['val']['x'], 
                     dataReaders['CNN']['val']['y'], val_transform, norm, (n,n))
 
 
-    #create test dataset
+    #crear test dataset
     dataset_test = Dataset_full(dataReaders['CNN']['test']['x'],
                         dataReaders['CNN']['test']['y'], val_transform, norm, (n,n))
 
@@ -200,17 +191,17 @@ else:
     dataset_train = Dataset(dataReaders['CNN']['train']['x'], 
                             dataReaders['CNN']['train']['y'], train_transform, norm)
    
-    #create val dataset
+    #crear val dataset
     dataset_val = Dataset(dataReaders['CNN']['val']['x'], 
                     dataReaders['CNN']['val']['y'], val_transform, norm)
 
     
-    #create test dataset
+    #crear test dataset
     dataset_test = Dataset(dataReaders['CNN']['test']['x'],
                         dataReaders['CNN']['test']['y'], val_transform, norm)
     
 
-#Create dataloaders
+#Crear dataloaders
 
 dataloader_train = DataLoader(dataset_train, batch_size=batch_size,
                                     shuffle=False, num_workers=8, 
@@ -226,18 +217,17 @@ dataloader_test = DataLoader(dataset_test, batch_size=1,
 
 
 dataloaders = {'train': dataloader_train, 'val': dataloader_val, 'test': dataloader_test}
-#get dataset sizes
+
+#obtener tamaños de los datasets
 dataset_sizes = {x: len(dataReaders['CNN'][x]['x']) for x in ['train', 'val', 'test']}
+
 '''
 ResNet
-A residual network, or ResNet for short, is an artificial neural network that helps build deeper neural networks by using jump connections or shortcuts to skip some layers. You will see how jumping helps build deeper network layers without falling into the problem of vanishing gradients.
+Una red residual, o ResNet para abreviar, es una red neuronal artificial que ayuda a construir redes neuronales más profundas utilizando conexiones de salto o atajos para saltarse algunas capas. Verá cómo los saltos ayudan a construir capas de red más profundas sin caer en el problema de la desaparición de gradientes.
 
-There are different versions of ResNet, including ResNet-18, ResNet-34, ResNet-50, and so on. The numbers denote layers, although the architecture is the same.
+Existen diferentes versiones de ResNet, entre ellas ResNet-18, ResNet-34, ResNet-50, etcétera. Los números denotan capas, aunque la arquitectura es la misma.
 '''
-# create the model from resnet18 
-# Calculate class weights
-
-
+# Crear un modelo a partir de resnet18 o resnet50
 
 if model_cnn=='resnet18':
     model = torchvision.models.resnet18(weights='DEFAULT' , progress=True) 
@@ -245,26 +235,28 @@ elif model_cnn=='resnet50':
     model = torchvision.models.resnet50(weights='DEFAULT' , progress=True)
 
 clases=['AT', 'BT', 'MT']
+
 for param in model.parameters():
     param.requires_grad = False
 
 num_ftrs = model.fc.in_features
-#changing last layer
+
+#cambiar la última capa con nuestras clases
 model.fc =  nn.Sequential(
                 nn.Dropout(p=dropout),  
                 nn.Linear(num_ftrs, len(clases))
             )
 
-# initializing weights with xavier
+# iniciación de pesos con xavier uniform
 model.fc.apply(init_weights)
 
-#record operations on this tensor
+#registrar operaciones en este tensor
 for param in model.fc.parameters():
     param.requires_grad = True
 for param in model.layer3.parameters():
     param.requires_grad = True
 
-#push model to GPU
+#pasar el modelo a la GPU
 model = model.to(device)
 
 
@@ -287,13 +279,13 @@ else:
     criterion = nn.CrossEntropyLoss()
 
 
-# saving results to path
+# guardar resultados en path
 save_path = path_dir+'results/'+results_folder_name+'/'
 
 params = [p for p in model.parameters() if p.requires_grad]
 # Configura el optimizador con weight decay
 optimizer = optim.AdamW(params, lr=lr)
-#Decays the learning rate of each parameter group by gamma every step_size epochs
+#Disminuye la tasa de aprendizaje de cada grupo de parámetros por gamma cada step_size epochs
 if bool_lr_scheduler:
     num_steps = len(dataloader_train) * args.epochs
     lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(
@@ -306,7 +298,7 @@ if bool_lr_scheduler:
         warmup_scheduler = warmup.RAdamWarmup(optimizer)
     elif args.warmup == 'none':
         warmup_scheduler = warmup.LinearWarmup(optimizer, 1)
-#training the model
+#entrenamiento del modelo
 results = train_model(model=model, criterion=criterion, optimizer=optimizer, dataloaders=dataloaders, 
             dataset_sizes=dataset_sizes, lr_scheduler=lr_scheduler,warmup_scheduler=warmup_scheduler, save_path=save_path, num_epochs=epochs, verbose=True)
 writer.flush()
@@ -316,7 +308,7 @@ print('Best acc : ', results['best_acc'])
 print("Saving model's weights to folder")
 torch.save(results['model'].state_dict(), 'weights/'+results_folder_name+'/final_weights.pkl')
 
-# write dict results on file
+# escribir los resultados del diccionario en un archivo
 a_file = open(save_path+'results_Epoch_'+str(results['best_epoch'])+'.pkl', "wb")
 pickle.dump(results, a_file)
 a_file.close()
@@ -324,7 +316,8 @@ a_file.close()
 model = results['model']
 
 model.eval()
-# save val and train preds
+
+# guardar predicciones de val y train
 
 for i in ['val', 'train']:
   data = pd.DataFrame()
@@ -333,7 +326,7 @@ for i in ['val', 'train']:
   data['Real'] = val_labels = np.argmax(dataReaders['CNN'][i]['y'], axis=1)
   data.to_excel(save_path+i+'_Epoch'+str(results['best_epoch'])+'.xlsx')
 
-#full image predictions
+#Prediccion de las imagenes completas
 
 from sklearn.metrics import accuracy_score
 for i in ['val', 'train']:
