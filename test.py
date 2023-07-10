@@ -60,6 +60,7 @@ if full:
 else:
     dataset_test = Dataset(dataReaders['CNN']['test']['x'],
                         dataReaders['CNN']['test']['y'], val_transform, normalization=norm)
+    
 dataloader_test = DataLoader(dataset_test, batch_size=1,
                                 shuffle=False, num_workers=1,
                                 pin_memory=True)

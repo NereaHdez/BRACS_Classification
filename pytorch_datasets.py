@@ -81,6 +81,8 @@ class Dataset_full(data.Dataset):
         self.inputs = inputs
         self.transform = transform
         self.resize = resize
+        self.normalization = normalization
+        
         if normalization == 'reinhard':
             self.normalization_method = sf.norm.autoselect('reinhard_fast')
         elif normalization == 'macenko':
