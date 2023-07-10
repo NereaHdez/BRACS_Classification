@@ -137,9 +137,11 @@ if full:
     name='matriz_confusion'+'_'+i+'.png'
     disp=ConfusionMatrixDisplay(cm, display_labels=['AT', 'BT', 'MT'])
     disp.plot()
+    
     plt.savefig(name)
     plt.show()
     # Guardar la visualización como un archivo PNG
+    os.chdir(save_path) 
     plt.savefig('matriz_confusion.png')
 else:
     ids=[]
@@ -177,6 +179,7 @@ else:
         plt.savefig(name)
         plt.show()
         # Guardar la visualización como un archivo PNG
+        os.chdir(save_path) 
         plt.savefig('matriz_confusion.png')
 
     else:
@@ -201,4 +204,5 @@ else:
         disp=ConfusionMatrixDisplay(cm, display_labels=['AT', 'BT', 'MT'])
         disp.plot()
         plt.savefig(name)
+        os.chdir(save_path) 
         plt.show()
