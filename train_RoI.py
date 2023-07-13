@@ -58,12 +58,14 @@ parser.add_argument('--lr_min', type=float, default=1e-6,
                     help='lr mínimo')
 parser.add_argument('--model', type=str, default='resnet18',
                     help='Nombre de la red preentrenada')
-parser.add_argument('--normalization', type=str, default='macenko',
+parser.add_argument('--normalization', type=str, default=None,
                     help='pkl de datasets')
 parser.add_argument('--im_size', type=int, default=512,
                     help='Tamaño de la imagen')
 parser.add_argument('--full', type=int, default=0,
                     help='Indicador booleano para habilitar o deshabilitar tratar con full imagenes')
+parser.add_argument('--n_clases', type=int, default=3,
+                    help='Número de clases')
 # Parsear los argumentos
 args = parser.parse_args()
 
@@ -85,6 +87,7 @@ dropout=args.dropout
 model_cnn = args.model
 norm=args.normalization
 n = args.im_size
+n_clases=args.n_clases
 
 def init_weights(m):
     if type(m) == nn.Linear:
@@ -234,7 +237,10 @@ if model_cnn=='resnet18':
 elif model_cnn=='resnet50':
     model = torchvision.models.resnet50(weights='DEFAULT' , progress=True)
 
-clases=['AT', 'BT', 'MT']
+if n_clases==3: 
+    clases=['AT', 'BT', 'MT']
+else: 
+    clases=['N', 'PB', 'UDH', 'FEA', 'ADH', 'DCIS', 'IC']
 
 for param in model.parameters():
     param.requires_grad = False
@@ -348,8 +354,23 @@ for i in ['val', 'train']:
     p=data[data['Case_Ids'].str.contains(k)]
     pred=p['Preds'].value_counts().idxmax()
     real=p['Real'].value_counts().idxmax()
-    labels = str(np.where(real == 0, 'AT', np.where(real == 1, 'BT', 'MT')))
-    preds= str(np.where(pred == 0, 'AT', np.where(pred == 1, 'BT', 'MT')).astype(str))
+    if n_clases==3:
+        labels = str(np.where(real == 0, 'AT', np.where(real == 1, 'BT', 'MT')))
+        preds= str(np.where(pred == 0, 'AT', np.where(pred == 1, 'BT', 'MT')).astype(str))
+    else:
+        label_mapping = {
+        0: 'N',
+        1: 'PB',
+        2: 'UDH',
+        3: 'FEA',
+        4: 'ADH',
+        5: 'DCIS',
+        6: 'IC'
+        }
+
+        # Mapear los valores reales a etiquetas
+        labels = str([label_mapping[value] for value in real])
+        preds= str([label_mapping[value] for value in pred])
     final=final.append({'Case_id':k,'preds':preds,'real':labels}, ignore_index=True)
   final.to_excel(save_path+i+'_results'+'.xlsx')
   accuracy = accuracy_score( np.array(final['real']), np.array(final['preds']))

@@ -28,6 +28,9 @@ parser.add_argument('--full', type=int, default=0,
                     help='Indicador booleano para habilitar o deshabilitar tratar con full imagenes')
 parser.add_argument('--im_size', type=int, default=512,
                     help='Tamaño de la imagen')
+parser.add_argument('--n_clases', type=int, default=3,
+                    help='Número de clases')
+
 # Parsear los argumentos
 args = parser.parse_args()
 results_folder_name = args.results_folder_name
@@ -39,6 +42,7 @@ save_path = path_dir+'results/'+results_folder_name+'/'
 directorio_actual = os.getcwd()
 full=bool(args.full)
 n = args.im_size
+n_clases=args.n_clases
 
 val_transform = transforms.Compose([
         transforms.ToTensor(),
@@ -52,6 +56,8 @@ with open(data_RoI_pkl, 'rb') as fp:
 dataReaders['CNN'] = data_RoI
 
 
+import warnings
+warnings.filterwarnings("ignore")
 #crear test dataloader
 
 if full: 
@@ -124,25 +130,14 @@ data['Real'] =  test_results['labels']
 probs=test_results['probs']
 i='test'
 
+if n_clases==3:
+            clases=['AT', 'BT', 'MT']
+else:
+            clases=['N', 'PB', 'UDH', 'FEA', 'ADH', 'DCIS', 'IC']
+
 if full:
-    accuracy = accuracy_score( np.array(data['Real']), np.array(data['Preds']))
-    f1 = f1_score( np.array(data['Real']), np.array(data['Preds']), average='weighted')
-    cm=confusion_matrix(np.array(data['Real']), np.array(data['Preds']))
-    text_acc=i+' accuracy:'+ str(accuracy)
-    text_f1=i+' f1 score:'+ str(f1)
-    print(text_acc) 
-    print(text_f1) 
-    print('Matriz de confusión: ')
-    print(cm)
-    name='matriz_confusion'+'_'+i+'.png'
-    disp=ConfusionMatrixDisplay(cm, display_labels=['AT', 'BT', 'MT'])
-    disp.plot()
-    
-    plt.savefig(name)
-    plt.show()
-    # Guardar la visualización como un archivo PNG
-    os.chdir(save_path) 
-    plt.savefig('matriz_confusion.png')
+    y_real=np.array(data['Real'])
+    y_pred=np.array(data['Preds'])
 else:
     ids=[]
     for j in data['Case_Ids']:
@@ -151,58 +146,46 @@ else:
         ids.append(aux)
     ids=pd.unique(ids)
     final=pd.DataFrame(columns=['Case_id','preds','real'])
-    y_true=[]
-    y_pred=[]
 
-    if Prob:
-        for k in ids:
-            p = data[data['Case_Ids'].str.contains(k)]
+    for k in ids:
+        p = data[data['Case_Ids'].str.contains(k)]
+        if Prob:
             m_train=probs[p.index]
             pred=np.argmax(m_train.sum(axis=0))
-            real=p['Real'].value_counts().idxmax()
-            labels = str(np.where(real == 0, 'AT', np.where(real == 1, 'BT', 'MT')))
-            preds= str(np.where(pred == 0, 'AT', np.where(pred == 1, 'BT', 'MT')).astype(str))
-            final=final.append({'Case_id':k,'preds':preds,'real':labels}, ignore_index=True)
-        final.to_excel(save_path+i+'_results'+'.xlsx')
-        accuracy = accuracy_score( np.array(final['real']), np.array(final['preds']))
-        f1 = f1_score( np.array(final['real']), np.array(final['preds']), average='weighted')
-        cm=confusion_matrix(np.array(final['real']), np.array(final['preds']))
-        text_acc=i+' accuracy:'+ str(accuracy)
-        text_f1=i+' f1 score:'+ str(f1)
-        print(text_acc) 
-        print(text_f1) 
-        print('Matriz de confusión: ')
-        print(cm)
-        name='matriz_confusion'+'_'+i+'.png'
-        disp=ConfusionMatrixDisplay(cm, display_labels=['AT', 'BT', 'MT'])
-        disp.plot()
-        plt.savefig(name)
-        plt.show()
-        # Guardar la visualización como un archivo PNG
-        os.chdir(save_path) 
-        plt.savefig('matriz_confusion.png')
-
-    else:
-        for k in ids:
-            p=data[data['Case_Ids'].str.contains(k)]
+        else: 
             pred=p['Preds'].value_counts().idxmax()
-            real=p['Real'].value_counts().idxmax()
-            labels = str(np.where(real == 0, 'AT', np.where(real == 1, 'BT', 'MT')))
-            preds= str(np.where(pred == 0, 'AT', np.where(pred == 1, 'BT', 'MT')).astype(str))
-            final=final.append({'Case_id':k,'preds':preds,'real':labels}, ignore_index=True)
-        final.to_excel(save_path+i+'_results'+'.xlsx')
-        accuracy = accuracy_score( np.array(final['real']), np.array(final['preds']))
-        f1 = f1_score( np.array(final['real']), np.array(final['preds']), average='weighted')
-        cm=confusion_matrix(np.array(final['real']), np.array(final['preds']))
-        text_acc=i+' accuracy:'+ str(accuracy)
-        text_f1=i+' f1 score:'+ str(f1)
-        print(text_acc) 
-        print(text_f1) 
-        print('Matriz de confusión: ')
-        print(cm) 
-        name='matriz_confusion'+'_'+i+'.png'
-        disp=ConfusionMatrixDisplay(cm, display_labels=['AT', 'BT', 'MT'])
-        disp.plot()
-        plt.savefig(name)
-        os.chdir(save_path) 
-        plt.show()
+        real=p['Real'].value_counts().idxmax()
+
+        label_mapping = dict(zip(range(n_clases), clases))
+        # Mapear los valores reales a etiquetas
+        labels = str([label_mapping[value] for value in real])
+        preds= str([label_mapping[value] for value in pred])
+        final=final.append({'Case_id':k,'preds':preds,'real':labels}, ignore_index=True)
+    final.to_excel(save_path+i+'_results'+'.xlsx')
+    y_real= np.array(final['real'])
+    y_pred= np.array(final['preds'])
+
+accuracy = accuracy_score(y_real, y_pred)
+
+f1_W = f1_score(y_real, y_pred, average='weighted')
+f1_micro = f1_score(y_real, y_pred, average='micro')
+f1_macro = f1_score(y_real, y_pred, average='macro')
+
+cm=confusion_matrix(y_real, y_pred)
+text_acc=i+' accuracy:'+ str(accuracy)
+text_f1w=i+' f1 score weighted:'+ str(f1_W)
+text_f1mi=i+' f1 score micro:'+ str(f1_micro)
+text_f1ma=i+' f1 score macro:'+ str(f1_macro)
+print(text_acc) 
+print(text_f1w) 
+print(text_f1mi) 
+print(text_f1ma) 
+print('Matriz de confusión: ')
+print(cm)
+name='matriz_confusion_test_nclases'+str(n_clases)+'.png'
+disp=ConfusionMatrixDisplay(cm, display_labels=clases)
+disp.plot()
+plt.show()
+# Guardar la visualización como un archivo PNG
+os.chdir(save_path) 
+plt.savefig(name)

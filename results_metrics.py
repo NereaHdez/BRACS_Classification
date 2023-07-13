@@ -17,12 +17,17 @@ parser.add_argument('--Prob', type=int, default=1,
                     help='Indicador booleano para habilitar o deshabilitar los pesos segun el tamaño de la clase')
 parser.add_argument('--data_RoI', type=str, default='data_RoI_512.pkl',
                     help='pkl de datasets')
+parser.add_argument('--full', type=int, default=0,
+                    help='Indicador booleano para habilitar o deshabilitar tratar con full imagenes')
+
 
 # Parsear los argumentos
 args = parser.parse_args()
 results_folder_name = args.results_folder_name
 Prob=bool(args.Prob)
 data_RoI_pkl=args.data_RoI
+full=bool(args.full)
+
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -83,7 +88,27 @@ for i in ['val', 'train']:
   final=pd.DataFrame(columns=['Case_id','preds','real'])
   y_true=[]
   y_pred=[]
-
+  
+  if full:
+    accuracy = accuracy_score( np.array(data['Real']), np.array(data['Preds']))
+    f1 = f1_score( np.array(data['Real']), np.array(data['Preds']), average='weighted')
+    cm=confusion_matrix(np.array(data['Real']), np.array(data['Preds']))
+    text_acc=i+' accuracy:'+ str(accuracy)
+    text_f1=i+' f1 score:'+ str(f1)
+    print(text_acc) 
+    print(text_f1) 
+    print('Matriz de confusión: ')
+    print(cm)
+    name='matriz_confusion'+'_'+i+'.png'
+    disp=ConfusionMatrixDisplay(cm, display_labels=['AT', 'BT', 'MT'])
+    disp.plot()
+    
+    plt.savefig(name)
+    plt.show()
+    # Guardar la visualización como un archivo PNG
+    os.chdir(save_path) 
+    plt.savefig('matriz_confusion.png')
+else:
   if Prob:
     for k in ids:
         p = data[data['Case_Ids'].str.contains(k)]

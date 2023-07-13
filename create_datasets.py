@@ -16,6 +16,8 @@ parser.add_argument('--folder_patches', type=str, default='BRACS_RoI_patches512'
                     help='Carpeta de los patches')
 parser.add_argument('--name_pkl', type=str, default='data_RoI512',
                     help='nombre archivo donde guardar datasets')
+parser.add_argument('--n_clases', type=int, default=3,
+                    help='Número de clases')
 # Parsear los argumentos
 args = parser.parse_args()
 
@@ -23,7 +25,7 @@ args = parser.parse_args()
 patch_size=args.patch_size
 folder_patches = args.folder_patches
 name_pkl=args.name_pkl
-
+n_clases=args.n_clases
 
 clases = pd.Series(['N', 'PB', 'UDH', 'FEA', 'ADH', 'DCIS', 'IC'])
 datasets = ['train', 'test', 'val']
@@ -36,8 +38,13 @@ BT = ['N', 'PB', 'UDH']
 MT = ['DCIS', 'IC']
 
 ohe = preprocessing.OneHotEncoder(sparse=False)
-classes = np.array(clases3)
-ohe.fit(classes.reshape(-1, 1))
+
+if n_clases==3:
+    classes = np.array(clases3)
+    ohe.fit(classes.reshape(-1, 1))
+else:
+    classes = np.array(clases)
+    ohe.fit(classes.reshape(-1, 1))
 
 data_RoI = {}
 data_RoI['train'] = {'x': [], 'y': []}
@@ -55,8 +62,9 @@ for i in datasets:
         data_RoI[i]['x'].extend(aux)
     
     label = [file.split('/')[-2].split('_')[-1] for file in files_RoI_pat]
-    label_mapping = {'AT': AT, 'BT': BT, 'MT': MT}
-    label = [next(key for key, value in label_mapping.items() if elemento in value) for elemento in label]
+    if n_clases==3:
+        label_mapping = {'AT': AT, 'BT': BT, 'MT': MT}
+        label = [next(key for key, value in label_mapping.items() if elemento in value) for elemento in label]
     
     data_RoI[i]['y'].extend(label)
     data_RoI[i]['x'] = np.asarray(data_RoI[i]['x'])
