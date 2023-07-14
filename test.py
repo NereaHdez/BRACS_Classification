@@ -1,9 +1,7 @@
 import os
 import pickle
 import argparse
-from sklearn.metrics import accuracy_score, f1_score
-from sklearn.metrics import ConfusionMatrixDisplay
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, ConfusionMatrixDisplay, confusion_matrix
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -12,6 +10,7 @@ from train_pred import predict_WSI
 from torch.utils.data import DataLoader
 from torchvision import transforms
 import torchvision.transforms as transforms
+import seaborn as sns
 
 # Crear el objeto ArgumentParser y definir los argumentos
 parser = argparse.ArgumentParser(description='Configuración para la visualización de resultados')
@@ -22,7 +21,7 @@ parser.add_argument('--data_RoI', type=str, default='data_RoI_256.pkl',
                     help='pkl de datasets')
 parser.add_argument('--Prob', type=int, default=1,
                     help='Indicador booleano para habilitar o deshabilitar los pesos segun el tamaño de la clase')
-parser.add_argument('--normalization', type=str, default='macenko',
+parser.add_argument('--normalization', type=str, default=None,
                     help='pkl de datasets')
 parser.add_argument('--full', type=int, default=0,
                     help='Indicador booleano para habilitar o deshabilitar tratar con full imagenes')
@@ -133,11 +132,13 @@ i='test'
 if n_clases==3:
             clases=['AT', 'BT', 'MT']
 else:
-            clases=['N', 'PB', 'UDH', 'FEA', 'ADH', 'DCIS', 'IC']
+            clases=['ADH',  'DCIS', 'FEA',  'IC', 'N', 'PB', 'UDH']
 
 if full:
     y_real=np.array(data['Real'])
     y_pred=np.array(data['Preds'])
+    y_probs=np.asarray(probs)
+    y_real_num=y_real
 else:
     ids=[]
     for j in data['Case_Ids']:
@@ -145,46 +146,63 @@ else:
         aux=aux+'_'
         ids.append(aux)
     ids=pd.unique(ids)
-    final=pd.DataFrame(columns=['Case_id','preds','real'])
+    final=pd.DataFrame(columns=['Case_id','preds','real', 'n pred', 'n real'])
+    
+    prob=np.empty((0, len(clases)))
 
     for k in ids:
         p = data[data['Case_Ids'].str.contains(k)]
+        prob = np.concatenate([prob, probs[p.index].sum(axis=0)/len(p)], axis=0)
         if Prob:
             m_train=probs[p.index]
-            pred=np.argmax(m_train.sum(axis=0))
+            pred=int(np.argmax(m_train.sum(axis=0)))
+
         else: 
             pred=p['Preds'].value_counts().idxmax()
-        real=p['Real'].value_counts().idxmax()
+        real=int(p['Real'].value_counts().idxmax())
 
         label_mapping = dict(zip(range(n_clases), clases))
         # Mapear los valores reales a etiquetas
-        labels = str([label_mapping[value] for value in real])
-        preds= str([label_mapping[value] for value in pred])
-        final=final.append({'Case_id':k,'preds':preds,'real':labels}, ignore_index=True)
+        labels = str(label_mapping[real])
+        preds= str(label_mapping[pred])
+
+        final=final.append({'Case_id':k,'preds':preds,'real':labels, 'n pred':pred, 'n real':real}, ignore_index=True)
     final.to_excel(save_path+i+'_results'+'.xlsx')
     y_real= np.array(final['real'])
     y_pred= np.array(final['preds'])
-
+    y_probs=np.asarray(prob)
+    y_real_num=np.array(final['n real'])
+print(y_real_num)
+print(y_probs)
 accuracy = accuracy_score(y_real, y_pred)
 
 f1_W = f1_score(y_real, y_pred, average='weighted')
 f1_micro = f1_score(y_real, y_pred, average='micro')
 f1_macro = f1_score(y_real, y_pred, average='macro')
+# Calcular el AUC
+auc = roc_auc_score(y_real_num, y_probs, multi_class = 'ovo')
 
 cm=confusion_matrix(y_real, y_pred)
 text_acc=i+' accuracy:'+ str(accuracy)
 text_f1w=i+' f1 score weighted:'+ str(f1_W)
 text_f1mi=i+' f1 score micro:'+ str(f1_micro)
 text_f1ma=i+' f1 score macro:'+ str(f1_macro)
+text_auc=i+' AUC:'+ str(auc)
 print(text_acc) 
 print(text_f1w) 
 print(text_f1mi) 
 print(text_f1ma) 
+print(text_auc)
+
 print('Matriz de confusión: ')
 print(cm)
 name='matriz_confusion_test_nclases'+str(n_clases)+'.png'
-disp=ConfusionMatrixDisplay(cm, display_labels=clases)
-disp.plot()
+df_cm = pd.DataFrame(cm, columns=clases, index = clases)
+df_cm.index.name = 'Actual'
+df_cm.columns.name = 'Predicted'
+plt.figure(figsize = (10,7))
+sns.set(font_scale=1.4)#for label size
+sns.heatmap(df_cm, cmap="Blues", annot=True,annot_kws={"size": 16}, cbar=False)# font size
 plt.show()
 # Guardar la visualización como un archivo PNG
 os.chdir(save_path) 

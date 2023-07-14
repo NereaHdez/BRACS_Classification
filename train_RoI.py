@@ -369,8 +369,8 @@ for i in ['val', 'train']:
         }
 
         # Mapear los valores reales a etiquetas
-        labels = str([label_mapping[value] for value in real])
-        preds= str([label_mapping[value] for value in pred])
+        labels = str(label_mapping[real] )
+        preds= str(label_mapping[ pred])
     final=final.append({'Case_id':k,'preds':preds,'real':labels}, ignore_index=True)
   final.to_excel(save_path+i+'_results'+'.xlsx')
   accuracy = accuracy_score( np.array(final['real']), np.array(final['preds']))

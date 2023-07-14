@@ -171,6 +171,8 @@ def train_model(model, criterion, optimizer, dataloaders, dataset_sizes,
 
     return results
 
+import torch.nn.functional as F
+
 def predict_WSI(model, dataloader, dataset_size, verbose=True):
     """Predecir patches/imagenes"""
     activation = {}
@@ -200,7 +202,8 @@ def predict_WSI(model, dataloader, dataset_size, verbose=True):
 
         test_preds += list(preds.cpu().numpy())
         test_labels += list(mlabel.cpu().numpy())
-        probs.extend(list(outputs.cpu().detach().numpy()))
+        probabilities = F.softmax(outputs, dim=1)  # Aplicar softmax a las salidas del modelo
+        probs.extend(list(probabilities.cpu().detach().numpy()))
         features.append(activation['fc'].cpu().numpy())
         case_ids.append(cids)
         # Calcular precisión
@@ -208,7 +211,7 @@ def predict_WSI(model, dataloader, dataset_size, verbose=True):
 
     acc = corrects.item() / dataset_size
 
-    probs=np.matrix(probs[:])
+    probs = np.matrix(probs[:])
 
     time_elapsed = time.time() - since
     if verbose:
