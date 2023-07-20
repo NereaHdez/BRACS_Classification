@@ -66,6 +66,9 @@ parser.add_argument('--full', type=int, default=0,
                     help='Indicador booleano para habilitar o deshabilitar tratar con full imagenes')
 parser.add_argument('--n_clases', type=int, default=3,
                     help='Número de clases')
+parser.add_argument('--optimizer', type=str, default='AdamW',
+                        choices=['AdamW', 'RAdam', 'NAdam', 'SGD'],
+                        help='Optimizador')
 # Parsear los argumentos
 args = parser.parse_args()
 
@@ -88,6 +91,7 @@ model_cnn = args.model
 norm=args.normalization
 n = args.im_size
 n_clases=args.n_clases
+optimizer_name=args.optimizer
 
 def init_weights(m):
     if type(m) == nn.Linear:
@@ -289,8 +293,17 @@ else:
 save_path = path_dir+'results/'+results_folder_name+'/'
 
 params = [p for p in model.parameters() if p.requires_grad]
-# Configura el optimizador con weight decay
-optimizer = optim.AdamW(params, lr=lr)
+
+if optimizer_name=='AdamW': 
+    # Configura el optimizador con weight decay
+    optimizer = optim.AdamW(params, lr=lr)
+elif optimizer_name=='RAdam':
+    optimizer = optim.RAdam(params, lr=lr)
+elif optimizer_name=='NAdam':
+    optimizer = optim.NAdam(params, lr=lr)
+elif optimizer_name=='SGD':
+    optimizer = optim.SGD(params, lr=lr)
+    
 #Disminuye la tasa de aprendizaje de cada grupo de parámetros por gamma cada step_size epochs
 if bool_lr_scheduler:
     num_steps = len(dataloader_train) * args.epochs

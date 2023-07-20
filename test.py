@@ -152,7 +152,8 @@ else:
 
     for k in ids:
         p = data[data['Case_Ids'].str.contains(k)]
-        prob = np.concatenate([prob, probs[p.index].sum(axis=0)/len(p)], axis=0)
+        prob = np.concatenate([prob, probs[p.index].sum(axis=0)], axis=0)
+        
         if Prob:
             m_train=probs[p.index]
             pred=int(np.argmax(m_train.sum(axis=0)))
@@ -160,7 +161,6 @@ else:
         else: 
             pred=p['Preds'].value_counts().idxmax()
         real=int(p['Real'].value_counts().idxmax())
-
         label_mapping = dict(zip(range(n_clases), clases))
         # Mapear los valores reales a etiquetas
         labels = str(label_mapping[real])
@@ -170,29 +170,39 @@ else:
     final.to_excel(save_path+i+'_results'+'.xlsx')
     y_real= np.array(final['real'])
     y_pred= np.array(final['preds'])
-    y_probs=np.asarray(prob)
-    y_real_num=np.array(final['n real'])
-print(y_real_num)
-print(y_probs)
-accuracy = accuracy_score(y_real, y_pred)
 
+    # Calcular la suma de cada fila
+    row_sums = np.sum(prob, axis=1)
+
+    #   Dividir cada elemento de la fila por la suma de la fila
+    normalized_matrix = prob / row_sums
+
+
+    y_probs=np.asarray(normalized_matrix)
+    y_real_num=np.array(final['n real'])
+
+
+
+
+
+accuracy=accuracy_score(y_real, y_pred)
 f1_W = f1_score(y_real, y_pred, average='weighted')
 f1_micro = f1_score(y_real, y_pred, average='micro')
 f1_macro = f1_score(y_real, y_pred, average='macro')
 # Calcular el AUC
-auc = roc_auc_score(y_real_num, y_probs, multi_class = 'ovo')
+#auc = roc_auc_score(y_real_num, y_probs, multi_class = 'ovo')
 
 cm=confusion_matrix(y_real, y_pred)
 text_acc=i+' accuracy:'+ str(accuracy)
 text_f1w=i+' f1 score weighted:'+ str(f1_W)
 text_f1mi=i+' f1 score micro:'+ str(f1_micro)
 text_f1ma=i+' f1 score macro:'+ str(f1_macro)
-text_auc=i+' AUC:'+ str(auc)
+#text_auc=i+' AUC:'+ str(auc)
 print(text_acc) 
 print(text_f1w) 
 print(text_f1mi) 
 print(text_f1ma) 
-print(text_auc)
+#print(text_auc)
 
 print('Matriz de confusión: ')
 print(cm)

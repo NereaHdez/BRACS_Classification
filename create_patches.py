@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser(description='Configuración para la creación d
 
 parser.add_argument('--patch_size', type=int, default=512,
                     help='Tamaño del patch')
-parser.add_argument('--overlap', type=float, default=0.25,
+parser.add_argument('--overlap', type=float, default=0,
                     help='Porcentaje de superposición')
 
 # Parsear los argumentos

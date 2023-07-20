@@ -28,7 +28,9 @@ parser.add_argument('--n_clases', type=int, default=3,
                     help='Número de clases')
 parser.add_argument('--full', type=int, default=0,
                     help='Indicador booleano para habilitar o deshabilitar tratar con full imagenes')
-# Parsear los argumentos
+parser.add_argument('--wsi', type=int, default=0,
+                    help='Indicador booleano para habilitar o deshabilitar el uso de imagenes WSI')
+
 args = parser.parse_args()
 
 # Acceder a los valores de los argumentos
@@ -37,6 +39,7 @@ folder_patches = args.folder_patches
 name_pkl=args.name_pkl
 n_clases=args.n_clases
 full=bool(args.full)
+wsi=bool(args.wsi)
 clases = pd.Series(['N', 'PB', 'UDH', 'FEA', 'ADH', 'DCIS', 'IC'])
 datasets = ['train', 'test', 'val']
 clases_roi = pd.Series(['0_N', '1_PB', '2_UDH', '3_FEA', '4_ADH', '5_DCIS', '6_IC'])
@@ -63,8 +66,10 @@ data_RoI['test'] = {'x': [], 'y': []}
 
 for i in datasets:
     files_RoI = []
+    files_WSI = []
     paths_RoI_pat = './'+folder_patches+'/' + i + '/' + clases_roi + '/'
     paths_RoI = './BRACS_RoI/latest_version/' + i + '/' + clases_roi + '/'
+
 
     if full:
         for j in range(7):
@@ -82,7 +87,43 @@ for i in datasets:
     if n_clases==3:
         label_mapping = {'AT': AT, 'BT': BT, 'MT': MT}
         label = [next(key for key, value in label_mapping.items() if elemento in value) for elemento in label]
+
     
+    if i=='train' and wsi:
+        # Ruta del archivo Excel
+        excel_file = "BRACS.xlsx"
+
+        # Leer el archivo Excel
+        df = pd.read_excel(excel_file)
+        df_train=df[df['Set']=='Training']
+        AT = ['FEA', 'ADH']
+        BT = ['N', 'PB', 'UDH']
+        MT = ['DCIS', 'IC']
+        label_mapping = {'AT': AT, 'BT': BT, 'MT': MT}
+        df_train['group'] = [next(key for key, value in label_mapping.items() if elemento in value) for elemento in df_train['WSI label']]
+        
+        def concatenar(row,texto=''):
+            return 'BRACS_WSI'+texto+'/Group_'+ row['group'] + '/Type_' + row['WSI label']+'/'+row['WSI Filename']+'/'
+
+        df_train['path_patch'] = df_train.apply(lambda row: concatenar(row, '_patches'), axis=1)
+        paths_WSI_pat = list(np.unique(df_train['path_patch']))
+
+        for j in range(len(paths_WSI_pat)):
+            
+            path = paths_WSI_pat[j]
+            if not os.path.isdir(path):
+                os.makedirs(path)
+            aux = [os.path.join(path, file) for file in os.listdir(path) if file.endswith('.jpeg')]
+            files_WSI.extend(aux)
+            data_RoI[i]['x'].extend(aux)
+
+        if n_clases==3:
+            label_WSI =[file.split('/')[-4].split('_')[-1] for file in files_WSI]
+        else:
+            label_WSI =[file.split('/')[-3].split('_')[-1] for file in files_WSI]
+
+        label.extend(label_WSI)
+
     data_RoI[i]['y'].extend(label)
     data_RoI[i]['x'] = np.asarray(data_RoI[i]['x'])
     data_RoI[i]['y'] = np.asarray(data_RoI[i]['y'])

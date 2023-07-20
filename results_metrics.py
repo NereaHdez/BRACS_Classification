@@ -97,7 +97,7 @@ for i in ['val', 'train']:
       ids=pd.unique(ids)
       final=pd.DataFrame(columns=['Case_id','preds','real', 'n pred', 'n real'])
       
-      prob=np.matrix()
+      prob=np.empty((0, len(clases)))
 
       for k in ids:
           p = data[data['Case_Ids'].str.contains(k)]
@@ -116,7 +116,7 @@ for i in ['val', 'train']:
           preds= str(label_mapping[pred])
 
           final=final.append({'Case_id':k,'preds':preds,'real':labels, 'n pred':pred, 'n real':real}, ignore_index=True)
-      final.to_excel(save_path+i+'_results'+'.xlsx')
+      final.to_excel(i+'_results'+'.xlsx')
       y_real= np.array(final['real'])
       y_pred= np.array(final['preds'])
       y_probs=np.asarray(prob)
@@ -127,19 +127,19 @@ for i in ['val', 'train']:
   f1_micro = f1_score(y_real, y_pred, average='micro')
   f1_macro = f1_score(y_real, y_pred, average='macro')
   # Calcular el AUC
-  auc = roc_auc_score(y_real_num, y_probs)
+  #auc = roc_auc_score(y_real_num, y_probs)
 
   cm=confusion_matrix(y_real, y_pred)
   text_acc=i+' accuracy:'+ str(accuracy)
   text_f1w=i+' f1 score weighted:'+ str(f1_W)
   text_f1mi=i+' f1 score micro:'+ str(f1_micro)
   text_f1ma=i+' f1 score macro:'+ str(f1_macro)
-  text_auc=i+' AUC:'+ str(auc)
+  #text_auc=i+' AUC:'+ str(auc)
   print(text_acc) 
   print(text_f1w) 
   print(text_f1mi) 
   print(text_f1ma) 
-  print(text_auc)
+  #print(text_auc)
 
   print('Matriz de confusión: ')
   print(cm)
@@ -152,7 +152,6 @@ for i in ['val', 'train']:
   sns.heatmap(df_cm, cmap="Blues", annot=True,annot_kws={"size": 16}, cbar=False)# font size
   plt.show()
   # Guardar la visualización como un archivo PNG
-  os.chdir(save_path) 
   plt.savefig(name)
 
 
