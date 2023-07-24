@@ -30,6 +30,8 @@ parser.add_argument('--full', type=int, default=0,
                     help='Indicador booleano para habilitar o deshabilitar tratar con full imagenes')
 parser.add_argument('--wsi', type=int, default=0,
                     help='Indicador booleano para habilitar o deshabilitar el uso de imagenes WSI')
+parser.add_argument('--patch_folder_WSI', type=str, default='_patches',
+                    help='terminacion de la carpeta de los parches de las WSI')
 
 args = parser.parse_args()
 
@@ -43,7 +45,7 @@ wsi=bool(args.wsi)
 clases = pd.Series(['N', 'PB', 'UDH', 'FEA', 'ADH', 'DCIS', 'IC'])
 datasets = ['train', 'test', 'val']
 clases_roi = pd.Series(['0_N', '1_PB', '2_UDH', '3_FEA', '4_ADH', '5_DCIS', '6_IC'])
-
+patch_folder_WSI=args.patch_folder_WSI
 # 3 Clases
 clases3 = ['AT', 'BT', 'MT']
 AT = ['FEA', 'ADH']
@@ -105,7 +107,7 @@ for i in datasets:
         def concatenar(row,texto=''):
             return 'BRACS_WSI'+texto+'/Group_'+ row['group'] + '/Type_' + row['WSI label']+'/'+row['WSI Filename']+'/'
 
-        df_train['path_patch'] = df_train.apply(lambda row: concatenar(row, '_patches'), axis=1)
+        df_train['path_patch'] = df_train.apply(lambda row: concatenar(row, patch_folder_WSI), axis=1)
         paths_WSI_pat = list(np.unique(df_train['path_patch']))
 
         for j in range(len(paths_WSI_pat)):
@@ -114,6 +116,7 @@ for i in datasets:
             if not os.path.isdir(path):
                 os.makedirs(path)
             aux = [os.path.join(path, file) for file in os.listdir(path) if file.endswith('.jpeg')]
+            print(aux)
             files_WSI.extend(aux)
             data_RoI[i]['x'].extend(aux)
 

@@ -141,7 +141,8 @@ parser.add_argument('--patch_size', default=768, type=int, help='patch size, '
 parser.add_argument('--max_patches_per_slide', default=2000, type=int)
 parser.add_argument('--num_process', default=10, type=int,
                     help='number of mutli-process, default 10')
-
+parser.add_argument('--patch_folder_WSI', type=str, default='_patches',
+                    help='terminacion de la carpeta de los parches de las WSI')
 
 
 if __name__ == '__main__':
@@ -153,7 +154,7 @@ if __name__ == '__main__':
     import pandas as pd
     # Ruta del archivo Excel
     excel_file = "BRACS.xlsx"
-
+    patch_folder_WSI=args.patch_folder_WSI
     # Leer el archivo Excel
     df = pd.read_excel(excel_file)
     df_train=df[df['Set']=='Training']
@@ -174,7 +175,7 @@ if __name__ == '__main__':
     # Aplicar la función a las filas del DataFrame y crear una nueva columna 'Nombre completo'
     df_train['path'] = df_train.apply(lambda row: concatenar(row, wsi=True), axis=1)
 
-    df_train['path_patch'] = df_train.apply(lambda row: concatenar(row, '_patches'), axis=1)
+    df_train['path_patch'] = df_train.apply(lambda row: concatenar(row, patch_folder_WSI), axis=1)
     df_train['mask_patch'] = df_train.apply(lambda row: concatenar(row, '_masks'), axis=1)
     slide_list=list(df_train['path'])
     slide_id=list(df_train['WSI Filename'])
