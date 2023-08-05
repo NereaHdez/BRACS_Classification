@@ -32,6 +32,9 @@ parser.add_argument('--wsi', type=int, default=0,
                     help='Indicador booleano para habilitar o deshabilitar el uso de imagenes WSI')
 parser.add_argument('--patch_folder_WSI', type=str, default='_patches',
                     help='terminacion de la carpeta de los parches de las WSI')
+parser.add_argument('--only_train', default=0, type=int,
+                    help='Indicador booleano para indicar si sólo desea hacer parches de entrenamiento.')
+parser.add_argument('--max_patches_per_slide', default=2000, type=int)
 
 args = parser.parse_args()
 
@@ -42,16 +45,26 @@ name_pkl=args.name_pkl
 n_clases=args.n_clases
 full=bool(args.full)
 wsi=bool(args.wsi)
-clases = pd.Series(['N', 'PB', 'UDH', 'FEA', 'ADH', 'DCIS', 'IC'])
+only_train=bool(args.only_train)
 datasets = ['train', 'test', 'val']
-clases_roi = pd.Series(['0_N', '1_PB', '2_UDH', '3_FEA', '4_ADH', '5_DCIS', '6_IC'])
+
+
+if n_clases==6:
+    clases = pd.Series(['PB', 'UDH', 'FEA', 'ADH', 'DCIS', 'IC'])
+    clases_roi = pd.Series(['1_PB', '2_UDH', '3_FEA', '4_ADH', '5_DCIS', '6_IC'])
+else:
+    clases = pd.Series(['N', 'PB', 'UDH', 'FEA', 'ADH', 'DCIS', 'IC'])
+    clases_roi = pd.Series(['0_N', '1_PB', '2_UDH', '3_FEA', '4_ADH', '5_DCIS', '6_IC'])
+
 patch_folder_WSI=args.patch_folder_WSI
+
 # 3 Clases
 clases3 = ['AT', 'BT', 'MT']
 AT = ['FEA', 'ADH']
 BT = ['N', 'PB', 'UDH']
 MT = ['DCIS', 'IC']
 
+#Codificacion ohe para las etiquetas
 ohe = preprocessing.OneHotEncoder(sparse=False)
 
 if n_clases==3:
@@ -74,50 +87,97 @@ for i in datasets:
 
 
     if full:
-        for j in range(7):
+        for j in range(n_clases):
             aux = glob.glob(paths_RoI[j] + '*.png')
             files_RoI += aux
             data_RoI[i]['x'].extend(aux)  
-    else:
-        for j in range(7):
+
+    elif not wsi:
+        for j in range(n_clases):
             path = paths_RoI_pat[j]
             aux = [os.path.join(path, file) for file in os.listdir(path) if file.endswith('.jpeg')]
             files_RoI.extend(aux)
             data_RoI[i]['x'].extend(aux)
-    
-    label = [file.split('/')[-2].split('_')[-1] for file in files_RoI]
-    if n_clases==3:
-        label_mapping = {'AT': AT, 'BT': BT, 'MT': MT}
-        label = [next(key for key, value in label_mapping.items() if elemento in value) for elemento in label]
+        label = [file.split('/')[-2].split('_')[-1] for file in files_RoI]
+        if n_clases==3:
+            label_mapping = {'AT': AT, 'BT': BT, 'MT': MT}
+            label = [next(key for key, value in label_mapping.items() if elemento in value) for elemento in label]
+        
+        if i=='train' and only_train:
+            # Ruta del archivo Excel
+            excel_file = "BRACS.xlsx"
 
-    
-    if i=='train' and wsi:
-        # Ruta del archivo Excel
+            # Leer el archivo Excel
+            df = pd.read_excel(excel_file)
+            df_aux=df[df['Set']=='Training']
+            
+            AT = ['FEA', 'ADH']
+            BT = ['N', 'PB', 'UDH']
+            MT = ['DCIS', 'IC']
+            label_mapping = {'AT': AT, 'BT': BT, 'MT': MT}
+            df_aux['group'] = [next(key for key, value in label_mapping.items() if elemento in value) for elemento in df_aux['WSI label']]
+            
+            def concatenar(row,texto=''):
+                return 'BRACS_WSI'+texto+'/Group_'+ row['group'] + '/Type_' + row['WSI label']+'/'+row['WSI Filename']+'/'
+
+            df_aux['path_patch'] = df_aux.apply(lambda row: concatenar(row, patch_folder_WSI), axis=1)
+            paths_WSI_pat = list(np.unique(df_aux['path_patch']))
+
+            for j in range(len(paths_WSI_pat)):
+                
+                path = paths_WSI_pat[j]
+                if not os.path.isdir(path):
+                    os.makedirs(path)
+                aux = [os.path.join(path, file) for file in os.listdir(path) if file.endswith('.jpeg')]
+                files_WSI.extend(aux)
+                data_RoI[i]['x'].extend(aux)
+
+            if n_clases==3:
+                label_WSI =[file.split('/')[-4].split('_')[-1] for file in files_WSI]
+            else:
+                label_WSI =[file.split('/')[-3].split('_')[-1] for file in files_WSI]
+
+            label.extend(label_WSI)
+
+    elif wsi:
+        label=[]
+            # Ruta del archivo Excel
         excel_file = "BRACS.xlsx"
-
-        # Leer el archivo Excel
+        patch_folder_WSI='_patches_max'+str(args.max_patches_per_slide)+'_size'+str(args.patch_size)        # Leer el archivo Excel
         df = pd.read_excel(excel_file)
-        df_train=df[df['Set']=='Training']
         AT = ['FEA', 'ADH']
         BT = ['N', 'PB', 'UDH']
+        if n_clases==6:
+            BT = [ 'PB', 'UDH']
+            df = df[df['WSI label'] != 'N']
         MT = ['DCIS', 'IC']
         label_mapping = {'AT': AT, 'BT': BT, 'MT': MT}
-        df_train['group'] = [next(key for key, value in label_mapping.items() if elemento in value) for elemento in df_train['WSI label']]
-        
-        def concatenar(row,texto=''):
-            return 'BRACS_WSI'+texto+'/Group_'+ row['group'] + '/Type_' + row['WSI label']+'/'+row['WSI Filename']+'/'
+        df['group'] = [next(key for key, value in label_mapping.items() if elemento in value) for elemento in df['WSI label']]
+        #print("DEBUGING SMALL SLIDE LIST")
+        #slide_list = ['GTEX-14A5I-0925.svs','GTEX-14A6H-0525.svs'
+        #          ]
+        def concatenar(row,texto='',i='train'):
+                return 'BRACS_WSI'+texto+'/'+i+'/Group_'+ row['group'] + '/Type_' + row['WSI label']+'/'+row['WSI Filename']+'/'
+        if i=='train':
+            set='Training'
+        elif i=='test':
+            set=='Testing'
+        else:
+            set=='Validation'
+        df_aux=df[df['Set']==set]
 
-        df_train['path_patch'] = df_train.apply(lambda row: concatenar(row, patch_folder_WSI), axis=1)
-        paths_WSI_pat = list(np.unique(df_train['path_patch']))
+        df_aux['path_patch'] = df_aux.apply(lambda row: concatenar(row, patch_folder_WSI), axis=1)
+        
+        paths_WSI_pat = list(np.unique(df_aux['path_patch']))
 
         for j in range(len(paths_WSI_pat)):
-            
+    
             path = paths_WSI_pat[j]
             if not os.path.isdir(path):
                 os.makedirs(path)
             aux = [os.path.join(path, file) for file in os.listdir(path) if file.endswith('.jpeg')]
-            print(aux)
             files_WSI.extend(aux)
+            data_RoI[i]['x']=data_RoI[i]['x']
             data_RoI[i]['x'].extend(aux)
 
         if n_clases==3:

@@ -131,8 +131,10 @@ i='test'
 
 if n_clases==3:
             clases=['AT', 'BT', 'MT']
+elif n_clases==7:
+     clases=['ADH',  'DCIS', 'FEA',  'IC', 'N', 'PB', 'UDH']
 else:
-            clases=['ADH',  'DCIS', 'FEA',  'IC', 'N', 'PB', 'UDH']
+     clases=['ADH',  'DCIS', 'FEA',  'IC', 'PB', 'UDH']
 
 if full:
     y_real=np.array(data['Real'])

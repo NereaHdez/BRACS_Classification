@@ -243,8 +243,10 @@ elif model_cnn=='resnet50':
 
 if n_clases==3: 
     clases=['AT', 'BT', 'MT']
-else: 
+elif n_clases==7: 
     clases=['N', 'PB', 'UDH', 'FEA', 'ADH', 'DCIS', 'IC']
+else:
+    clases=['PB', 'UDH', 'FEA', 'ADH', 'DCIS', 'IC']
 
 for param in model.parameters():
     param.requires_grad = False
@@ -370,7 +372,7 @@ for i in ['val', 'train']:
     if n_clases==3:
         labels = str(np.where(real == 0, 'AT', np.where(real == 1, 'BT', 'MT')))
         preds= str(np.where(pred == 0, 'AT', np.where(pred == 1, 'BT', 'MT')).astype(str))
-    else:
+    elif n_clases==7:
         label_mapping = {
         0: 'N',
         1: 'PB',
@@ -379,6 +381,19 @@ for i in ['val', 'train']:
         4: 'ADH',
         5: 'DCIS',
         6: 'IC'
+        }
+
+        # Mapear los valores reales a etiquetas
+        labels = str(label_mapping[real] )
+        preds= str(label_mapping[ pred])
+    else:
+        label_mapping = {
+        0: 'PB',
+        1: 'UDH',
+        2: 'FEA',
+        3: 'ADH',
+        4: 'DCIS',
+        5: 'IC'
         }
 
         # Mapear los valores reales a etiquetas

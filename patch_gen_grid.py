@@ -141,8 +141,8 @@ parser.add_argument('--patch_size', default=768, type=int, help='patch size, '
 parser.add_argument('--max_patches_per_slide', default=2000, type=int)
 parser.add_argument('--num_process', default=10, type=int,
                     help='number of mutli-process, default 10')
-parser.add_argument('--patch_folder_WSI', type=str, default='_patches',
-                    help='terminacion de la carpeta de los parches de las WSI')
+
+
 
 
 if __name__ == '__main__':
@@ -154,39 +154,47 @@ if __name__ == '__main__':
     import pandas as pd
     # Ruta del archivo Excel
     excel_file = "BRACS.xlsx"
-    patch_folder_WSI=args.patch_folder_WSI
+    patch_folder_WSI='_patches_max'+str(args.max_patches_per_slide)+'_size'+str(args.patch_size)
     # Leer el archivo Excel
     df = pd.read_excel(excel_file)
-    df_train=df[df['Set']=='Training']
     AT = ['FEA', 'ADH']
     BT = ['N', 'PB', 'UDH']
     MT = ['DCIS', 'IC']
     label_mapping = {'AT': AT, 'BT': BT, 'MT': MT}
-    df_train['group'] = [next(key for key, value in label_mapping.items() if elemento in value) for elemento in df_train['WSI label']]
+    df['group'] = [next(key for key, value in label_mapping.items() if elemento in value) for elemento in df['WSI label']]
     #print("DEBUGING SMALL SLIDE LIST")
     #slide_list = ['GTEX-14A5I-0925.svs','GTEX-14A6H-0525.svs'
     #          ]
-    def concatenar(row,texto='',wsi=False):
+    def concatenar(row,texto='',wsi=False,i='train'):
         if wsi:
             return 'BRACS_WSI/train/Group_'+ row['group'] + '/Type_' + row['WSI label']+'/'+ row['WSI Filename']+'.svs' 
         else:
-            return 'BRACS_WSI'+texto+'/Group_'+ row['group'] + '/Type_' + row['WSI label']+'/'
+            return 'BRACS_WSI'+texto+'/'+i+'/Group_'+ row['group'] + '/Type_' + row['WSI label']+'/'
 
     # Aplicar la función a las filas del DataFrame y crear una nueva columna 'Nombre completo'
-    df_train['path'] = df_train.apply(lambda row: concatenar(row, wsi=True), axis=1)
+    datasets=['train','test','val']
 
-    df_train['path_patch'] = df_train.apply(lambda row: concatenar(row, patch_folder_WSI), axis=1)
-    df_train['mask_patch'] = df_train.apply(lambda row: concatenar(row, '_masks'), axis=1)
-    slide_list=list(df_train['path'])
-    slide_id=list(df_train['WSI Filename'])
-    patch_path=list(df_train['path_patch'])
-    mask_path=list(df_train['mask_patch'])
-    opts = [
-        slide_list, (args.patch_size, args.patch_size), patch_path, mask_path,
-         slide_id, args.max_patches_per_slide]
-    #pool = Pool(processes=args.num_process)
-    #pool.map(process, opts)
-    process(opts)
+    for i in datasets:
+        if i=='train':
+            set='Training'
+        elif i=='test':
+            set=='Testing'
+        else:
+            set=='Validation'
+        df_aux=df[df['Set']==set]
+        df_aux['path'] = df_aux.apply(lambda row: concatenar(row, wsi=True), axis=1)
+        df_aux['path_patch'] = df_aux.apply(lambda row: concatenar(row, patch_folder_WSI), axis=1)
+        df_aux['mask_patch'] = df_aux.apply(lambda row: concatenar(row, '_masks'), axis=1)
+        slide_list=list(df_aux['path'])
+        slide_id=list(df_aux['WSI Filename'])
+        patch_path=list(df_aux['path_patch'])
+        mask_path=list(df_aux['mask_patch'])
+        opts = [
+            slide_list, (args.patch_size, args.patch_size), patch_path, mask_path,
+            slide_id, args.max_patches_per_slide]
+        #pool = Pool(processes=args.num_process)
+        #pool.map(process, opts)
+        process(opts)
     '''
         from tqdm import tqdm
     for opt in tqdm(opts):
