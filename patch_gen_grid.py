@@ -12,6 +12,8 @@ from scipy.ndimage import binary_dilation, binary_erosion
 import argparse
 import logging
 import pickle
+import warnings
+warnings.filterwarnings("ignore")
 
 from itertools import tee
 from PIL import Image
@@ -167,7 +169,7 @@ if __name__ == '__main__':
     #          ]
     def concatenar(row,texto='',wsi=False,i='train'):
         if wsi:
-            return 'BRACS_WSI/train/Group_'+ row['group'] + '/Type_' + row['WSI label']+'/'+ row['WSI Filename']+'.svs' 
+            return 'BRACS_WSI/'+i+'/Group_'+ row['group'] + '/Type_' + row['WSI label']+'/'+ row['WSI Filename']+'.svs' 
         else:
             return 'BRACS_WSI'+texto+'/'+i+'/Group_'+ row['group'] + '/Type_' + row['WSI label']+'/'
 
@@ -178,13 +180,16 @@ if __name__ == '__main__':
         if i=='train':
             set='Training'
         elif i=='test':
-            set=='Testing'
+            set='Testing'
         else:
-            set=='Validation'
+            set='Validation'
+        print(i, set)
+        df_aux=pd.DataFrame()
         df_aux=df[df['Set']==set]
-        df_aux['path'] = df_aux.apply(lambda row: concatenar(row, wsi=True), axis=1)
-        df_aux['path_patch'] = df_aux.apply(lambda row: concatenar(row, patch_folder_WSI), axis=1)
-        df_aux['mask_patch'] = df_aux.apply(lambda row: concatenar(row, '_masks'), axis=1)
+        df_aux['path'] = df_aux.apply(lambda row: concatenar(row, wsi=True, i=i), axis=1)
+        df_aux['path_patch'] = df_aux.apply(lambda row: concatenar(row, patch_folder_WSI, i=i), axis=1)
+        df_aux['mask_patch'] = df_aux.apply(lambda row: concatenar(row, '_masks', i=i), axis=1)
+        print(df_aux.head)
         slide_list=list(df_aux['path'])
         slide_id=list(df_aux['WSI Filename'])
         patch_path=list(df_aux['path_patch'])

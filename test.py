@@ -12,6 +12,7 @@ from torchvision import transforms
 import torchvision.transforms as transforms
 import seaborn as sns
 
+import argparse
 # Crear el objeto ArgumentParser y definir los argumentos
 parser = argparse.ArgumentParser(description='Configuración para la visualización de resultados')
 
@@ -23,8 +24,8 @@ parser.add_argument('--Prob', type=int, default=1,
                     help='Indicador booleano para habilitar o deshabilitar los pesos segun el tamaño de la clase')
 parser.add_argument('--normalization', type=str, default=None,
                     help='pkl de datasets')
-parser.add_argument('--full', type=int, default=0,
-                    help='Indicador booleano para habilitar o deshabilitar tratar con full imagenes')
+parser.add_argument('--wsi_level', type=int, default=0,
+                    help='Indicador booleano para habilitar o deshabilitar hacer la predicciónd de la imagen completa')
 parser.add_argument('--im_size', type=int, default=512,
                     help='Tamaño de la imagen')
 parser.add_argument('--n_clases', type=int, default=3,
@@ -39,7 +40,8 @@ norm=args.normalization
 path_dir='./'
 save_path = path_dir+'results/'+results_folder_name+'/'
 directorio_actual = os.getcwd()
-full=bool(args.full)
+wsi_level=bool(args.wsi_level)
+
 n = args.im_size
 n_clases=args.n_clases
 
@@ -59,11 +61,8 @@ import warnings
 warnings.filterwarnings("ignore")
 #crear test dataloader
 
-if full: 
-    dataset_test = Dataset_full(dataReaders['CNN']['test']['x'],
-                        dataReaders['CNN']['test']['y'], val_transform, normalization=norm, resize=(n,n))
-else:
-    dataset_test = Dataset(dataReaders['CNN']['test']['x'],
+
+dataset_test = Dataset(dataReaders['CNN']['test']['x'],
                         dataReaders['CNN']['test']['y'], val_transform, normalization=norm)
     
 dataloader_test = DataLoader(dataset_test, batch_size=1,
@@ -136,11 +135,12 @@ elif n_clases==7:
 else:
      clases=['ADH',  'DCIS', 'FEA',  'IC', 'PB', 'UDH']
 
-if full:
-    y_real=np.array(data['Real'])
-    y_pred=np.array(data['Preds'])
-    y_probs=np.asarray(probs)
-    y_real_num=y_real
+
+if wsi_level:
+    excel_file = "BRACS.xlsx"
+    df = pd.read_excel(excel_file)
+    ids = list(df[df['Set'] == 'Testing']['WSI Filename'])
+
 else:
     ids=[]
     for j in data['Case_Ids']:
@@ -148,45 +148,54 @@ else:
         aux=aux+'_'
         ids.append(aux)
     ids=pd.unique(ids)
-    final=pd.DataFrame(columns=['Case_id','preds','real', 'n pred', 'n real'])
-    
-    prob=np.empty((0, len(clases)))
 
-    for k in ids:
-        p = data[data['Case_Ids'].str.contains(k)]
+final = pd.DataFrame(columns=['Case_id', 'preds', 'real', 'n pred', 'n real'])
+
+# Definir el número de clases (n_clases) y la lista de clases (clases) antes de este punto
+
+prob = np.empty((0, len(clases)))
+
+for k in ids:
+    print(k)
+    p = data[data['Case_Ids'].str.contains(k)]
+
+    if not p.empty:  # Verificar si p no está vacío
+        print(p)
         prob = np.concatenate([prob, probs[p.index].sum(axis=0)], axis=0)
-        
-        if Prob:
-            m_train=probs[p.index]
-            pred=int(np.argmax(m_train.sum(axis=0)))
 
-        else: 
-            pred=p['Preds'].value_counts().idxmax()
-        real=int(p['Real'].value_counts().idxmax())
+        if Prob:
+            m_train = probs[p.index]
+            pred = int(np.argmax(m_train.sum(axis=0)))
+        else:
+            pred = p['Preds'].value_counts().idxmax()
+        
+        real = int(p['Real'].value_counts().idxmax())
         label_mapping = dict(zip(range(n_clases), clases))
         # Mapear los valores reales a etiquetas
         labels = str(label_mapping[real])
-        preds= str(label_mapping[pred])
+        preds = str(label_mapping[pred])
 
-        final=final.append({'Case_id':k,'preds':preds,'real':labels, 'n pred':pred, 'n real':real}, ignore_index=True)
-    final.to_excel(save_path+i+'_results'+'.xlsx')
-    y_real= np.array(final['real'])
-    y_pred= np.array(final['preds'])
+        final = final.append({'Case_id': k, 'preds': preds, 'real': labels, 'n pred': pred, 'n real': real},
+                            ignore_index=True)
+    else:
+        # Caso en el que p está vacío
+        print(f"No se encontraron datos para Case_id: {k}")
+final.to_excel(save_path+i+'_results'+'.xlsx')
+y_real= np.array(final['real'])
+y_pred= np.array(final['preds'])
 
-    # Calcular la suma de cada fila
-    row_sums = np.sum(prob, axis=1)
+# Calcular la suma de cada fila
+row_sums = np.sum(prob, axis=1)
 
-    #   Dividir cada elemento de la fila por la suma de la fila
-    normalized_matrix = prob / row_sums
-
-
-    y_probs=np.asarray(normalized_matrix)
-    y_real_num=np.array(final['n real'])
-
-
+#   Dividir cada elemento de la fila por la suma de la fila
+normalized_matrix = prob / row_sums
 
 
+y_probs=np.asarray(normalized_matrix)
+y_real_num=np.array(final['n real'])
 
+
+     
 accuracy=accuracy_score(y_real, y_pred)
 f1_W = f1_score(y_real, y_pred, average='weighted')
 f1_micro = f1_score(y_real, y_pred, average='micro')
