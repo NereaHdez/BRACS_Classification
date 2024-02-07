@@ -35,6 +35,8 @@ parser.add_argument('--patch_folder_WSI', type=str, default='_patches',
 parser.add_argument('--only_train', default=0, type=int,
                     help='Indicador booleano para indicar si sólo desea hacer parches de entrenamiento.')
 parser.add_argument('--max_patches_per_slide', default=2000, type=int)
+parser.add_argument('--use_roi', default=0, type=int,
+                    help='Indicador booleano para indicar si se quiere usar parches RoI para entrenar WSI.')
 
 args = parser.parse_args()
 
@@ -44,6 +46,7 @@ folder_patches = args.folder_patches
 name_pkl=args.name_pkl
 n_clases=args.n_clases
 full=bool(args.full)
+use_roi=bool(args.use_roi)
 wsi=bool(args.wsi)
 only_train=bool(args.only_train)
 datasets = ['train', 'test', 'val']
@@ -65,7 +68,7 @@ BT = ['N', 'PB', 'UDH']
 MT = ['DCIS', 'IC']
 
 #Codificacion ohe para las etiquetas
-ohe = preprocessing.OneHotEncoder(sparse=False)
+ohe = preprocessing.OneHotEncoder(sparse_output=False)
 
 if n_clases==3:
     classes = np.array(clases3)
@@ -85,24 +88,25 @@ for i in datasets:
     paths_RoI_pat = './'+folder_patches+'/' + i + '/' + clases_roi + '/'
     paths_RoI = './BRACS_RoI/latest_version/' + i + '/' + clases_roi + '/'
 
-
     if full:
-        for j in range(n_clases):
+        for j in range(7):
             aux = glob.glob(paths_RoI[j] + '*.png')
             files_RoI += aux
             data_RoI[i]['x'].extend(aux)  
 
     elif not wsi:
-        for j in range(n_clases):
+        for j in range(7):
             path = paths_RoI_pat[j]
             aux = [os.path.join(path, file) for file in os.listdir(path) if file.endswith('.jpeg')]
             files_RoI.extend(aux)
             data_RoI[i]['x'].extend(aux)
+            
         label = [file.split('/')[-2].split('_')[-1] for file in files_RoI]
+    
         if n_clases==3:
             label_mapping = {'AT': AT, 'BT': BT, 'MT': MT}
             label = [next(key for key, value in label_mapping.items() if elemento in value) for elemento in label]
-        
+            
         if i=='train' and only_train:
             # Ruta del archivo Excel
             excel_file = "BRACS.xlsx"
@@ -142,37 +146,42 @@ for i in datasets:
     elif wsi:
         label=[]
             # Ruta del archivo Excel
+        # Ruta del archivo Excel
         excel_file = "BRACS.xlsx"
-        patch_folder_WSI='_patches_max'+str(args.max_patches_per_slide)+'_size'+str(args.patch_size)        # Leer el archivo Excel
+        patch_folder_WSI='_patches_max'+str(args.max_patches_per_slide)+'_size'+str(args.patch_size)
+        # Leer el archivo Excel
         df = pd.read_excel(excel_file)
         AT = ['FEA', 'ADH']
         BT = ['N', 'PB', 'UDH']
-        if n_clases==6:
-            BT = [ 'PB', 'UDH']
-            df = df[df['WSI label'] != 'N']
         MT = ['DCIS', 'IC']
         label_mapping = {'AT': AT, 'BT': BT, 'MT': MT}
         df['group'] = [next(key for key, value in label_mapping.items() if elemento in value) for elemento in df['WSI label']]
         #print("DEBUGING SMALL SLIDE LIST")
         #slide_list = ['GTEX-14A5I-0925.svs','GTEX-14A6H-0525.svs'
         #          ]
-        def concatenar(row,texto='',i='train'):
-                return 'BRACS_WSI'+texto+'/'+i+'/Group_'+ row['group'] + '/Type_' + row['WSI label']+'/'+row['WSI Filename']+'/'
+        def concatenar(row,texto='',wsi=False,i='train'):
+            if wsi:
+                return 'BRACS_WSI/'+i+'/Group_'+ row['group'] + '/Type_' + row['WSI label']+'/'+ row['WSI Filename']+'.svs' 
+            else:
+                return 'BRACS_WSI'+texto+'/'+i+'/Group_'+ row['group'] + '/Type_' + row['WSI label']+'/'+ row['WSI Filename']+'/'
+        print(i)
         if i=='train':
             set='Training'
         elif i=='test':
-            set=='Testing'
+            set='Testing'
         else:
-            set=='Validation'
+            set='Validation'
+        print(i, set)
+        df_aux=pd.DataFrame()
         df_aux=df[df['Set']==set]
-
-        df_aux['path_patch'] = df_aux.apply(lambda row: concatenar(row, patch_folder_WSI), axis=1)
-        
+        print(df_aux.head)
+        df_aux['path_patch'] = df_aux.apply(lambda row: concatenar(row, patch_folder_WSI, i=i), axis=1)
         paths_WSI_pat = list(np.unique(df_aux['path_patch']))
-
+        print(paths_WSI_pat)
         for j in range(len(paths_WSI_pat)):
     
             path = paths_WSI_pat[j]
+            print(path)
             if not os.path.isdir(path):
                 os.makedirs(path)
             aux = [os.path.join(path, file) for file in os.listdir(path) if file.endswith('.jpeg')]
@@ -184,9 +193,19 @@ for i in datasets:
             label_WSI =[file.split('/')[-4].split('_')[-1] for file in files_WSI]
         else:
             label_WSI =[file.split('/')[-3].split('_')[-1] for file in files_WSI]
-
+        print(label_WSI)
         label.extend(label_WSI)
-
+        if use_roi and i=='train':
+            for j in range(7):
+                path = paths_RoI_pat[j]
+                aux = [os.path.join(path, file) for file in os.listdir(path) if file.endswith('.jpeg')]
+                files_RoI.extend(aux)
+                data_RoI[i]['x'].extend(aux)
+            label_roi = [file.split('/')[-2].split('_')[-1] for file in files_RoI]
+            if n_clases==3:
+                label_mapping = {'AT': AT, 'BT': BT, 'MT': MT}
+                label_roi = [next(key for key, value in label_mapping.items() if elemento in value) for elemento in label_roi]
+            label.extend(label_roi)
     data_RoI[i]['y'].extend(label)
     data_RoI[i]['x'] = np.asarray(data_RoI[i]['x'])
     data_RoI[i]['y'] = np.asarray(data_RoI[i]['y'])
@@ -205,4 +224,18 @@ df=pd.DataFrame()
 df['x']=data_RoI['train']['x']
 df['y']=np.argmax(data_RoI['train']['y'], axis=1)
 value_counts = df['y'].value_counts()
-print(value_counts)
+print('Entrenamiento:',value_counts)
+
+df=pd.DataFrame()
+
+df['xval']=data_RoI['val']['x']
+df['yval']=np.argmax(data_RoI['val']['y'], axis=1)
+value_counts = df['yval'].value_counts()
+print('Validación:',value_counts)
+
+df=pd.DataFrame()
+
+df['xtest']=data_RoI['test']['x']
+df['ytest']=np.argmax(data_RoI['test']['y'], axis=1)
+value_counts = df['ytest'].value_counts()
+print('Test:',value_counts)
